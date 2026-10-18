@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: Ubuntu, Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 4px 8px; }
+  label { display: block; font-weight: bold; margin: 12px 0 4px; }
+  input[type=text], select { width: 100%; box-sizing: border-box; padding: 6px; font-size: 14px; }
+  .nota { color: #666; font-size: 12px; margin-top: 3px; }
+  .check { margin-top: 14px; font-weight: normal; }
+  button { background: #6075BB; color: #fff; border: 0; border-radius: 4px; padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  button:disabled { background: #AAB3D6; }
+  .pie { margin-top: 18px; text-align: right; }
+  #estado { margin-top: 10px; }
+  .error { background: #FDECEA; border-left: 4px solid #D93025; padding: 8px 10px; }
+  .ok { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; }
+</style>
+</head>
+<body data-partidas="<?= partidas ?>">
+  <label for="titulo">Título de la actividad</label>
+  <input type="text" id="titulo" placeholder="Convivencia de otoño">
+
+  <label for="ingresos">Partida de ingresos</label>
+  <select id="ingresos"></select>
+
+  <label for="gastos">Partida de gastos</label>
+  <select id="gastos"></select>
+  <div class="nota">Si falta la partida, añádela antes en la hoja Presupuesto (por ejemplo I23 y G23).</div>
+
+  <label class="check"><input type="checkbox" id="subpartidas" checked>
+    Crear las subpartidas de gastos por defecto (Alojamiento, Manutención, Transporte y Material)</label>
+
+  <div class="pie">
+    <button onclick="google.script.host.close()" style="background:#888">Cancelar</button>
+    <button id="crear" onclick="crear()">Crear la hoja</button>
+  </div>
+  <div id="estado"></div>
+
+<script>
+  const P = JSON.parse(document.body.dataset.partidas);
+  function llenar(id, lista) {
+    const s = document.getElementById(id);
+    const vacio = document.createElement('option'); vacio.value = ''; vacio.textContent = '(ninguna)'; s.appendChild(vacio);
+    lista.forEach(p => {
+      const o = document.createElement('option'); o.value = p.codigo; o.textContent = p.texto;
+      if (!s.dataset.elegida && p.seccion.indexOf('2.') === 0) { o.selected = true; s.dataset.elegida = '1'; }
+      s.appendChild(o);
+    });
+  }
+  llenar('ingresos', P.ingresos);
+  llenar('gastos', P.gastos);
+
+  function estado(clase, texto) {
+    const e = document.getElementById('estado');
+    e.innerHTML = ''; const d = document.createElement('div'); d.className = clase; d.textContent = texto; e.appendChild(d);
+  }
+
+  function crear() {
+    const datos = {
+      titulo: document.getElementById('titulo').value,
+      ingresos: document.getElementById('ingresos').value,
+      gastos: document.getElementById('gastos').value,
+      subpartidas: document.getElementById('subpartidas').checked
+    };
+    const b = document.getElementById('crear');
+    b.disabled = true;
+    estado('ok', 'Creando…');
+    google.script.run
+      .withSuccessHandler(r => {
+        if (r.aviso) { b.disabled = false; estado('ok', 'Hoja «' + r.nombre + '» creada. ' + r.aviso); }
+        else google.script.host.close();
+      })
+      .withFailureHandler(err => { b.disabled = false; estado('error', err.message || String(err)); })
+      .crearHojaDeActividad(datos);
+  }
+</script>
+</body>
+</html>

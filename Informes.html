@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: Ubuntu, Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 4px 8px; }
+  .tipo { display: block; margin: 6px 0; }
+  label.campo { display: block; font-weight: bold; margin: 14px 0 4px; }
+  input[type=date], select { width: 100%; box-sizing: border-box; padding: 6px; font-size: 14px; }
+  .nota { color: #666; font-size: 12px; }
+  button { background: #6075BB; color: #fff; border: 0; border-radius: 4px; padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  button:disabled { background: #AAB3D6; }
+  .pie { margin-top: 16px; text-align: right; }
+  #estado { margin-top: 10px; }
+  #estado ul { margin: 6px 0; padding-left: 18px; }
+  .error { background: #FDECEA; border-left: 4px solid #D93025; padding: 8px 10px; }
+  .ok { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; }
+  .oculto { display: none; }
+</style>
+</head>
+<body data-datos="<?= datos ?>">
+  <label class="tipo"><input type="radio" name="tipo" value="cierre"> Cierre del ejercicio <span id="ej"></span></label>
+  <label class="tipo"><input type="radio" name="tipo" value="provisional" checked> Ejercicio provisional, a una fecha</label>
+  <label class="tipo"><input type="radio" name="tipo" value="actividad"> Una actividad, a una fecha</label>
+
+  <div id="bloqueFecha">
+    <label class="campo" for="fecha">Fecha de corte</label>
+    <input type="date" id="fecha">
+  </div>
+  <div id="bloqueActividad" class="oculto">
+    <label class="campo" for="actividad">Actividad</label>
+    <select id="actividad"></select>
+  </div>
+  <div id="bloqueMovimientos">
+    <label class="tipo" style="margin-top:14px"><input type="checkbox" id="movimientos">
+      Añadir al final la relación de todos los movimientos</label>
+    <div class="nota">El informe nunca lleva el concepto del banco (trae nombres de familias): las cuotas salen como «Cuota de socio».</div>
+  </div>
+
+  <div class="pie">
+    <button onclick="google.script.host.close()" style="background:#888">Cerrar</button>
+    <button id="generar" onclick="generar()">Generar PDF</button>
+  </div>
+  <div id="estado"></div>
+
+<script>
+  const D = JSON.parse(document.body.dataset.datos);
+  document.getElementById('ej').textContent = D.ejercicio + ' (a ' + D.fin.split('-').reverse().join('/') + ')';
+  document.getElementById('fecha').value = D.hoy;
+  const sel = document.getElementById('actividad');
+  if (!D.actividades.length) {
+    const o = document.createElement('option'); o.textContent = '(no hay hojas de actividad)'; o.value = ''; sel.appendChild(o);
+  }
+  D.actividades.forEach(a => { const o = document.createElement('option'); o.value = a.nombre; o.textContent = a.titulo; sel.appendChild(o); });
+
+  function tipo() { return document.querySelector('input[name=tipo]:checked').value; }
+  document.querySelectorAll('input[name=tipo]').forEach(r => r.addEventListener('change', () => {
+    const t = tipo();
+    document.getElementById('bloqueFecha').classList.toggle('oculto', t === 'cierre');
+    document.getElementById('bloqueActividad').classList.toggle('oculto', t !== 'actividad');
+    document.getElementById('bloqueMovimientos').classList.toggle('oculto', t === 'actividad');
+  }));
+
+  function mostrar(clase, titulo, lineas, enlace) {
+    const e = document.getElementById('estado');
+    e.innerHTML = '';
+    const d = document.createElement('div'); d.className = clase;
+    const b = document.createElement('b'); b.textContent = titulo; d.appendChild(b);
+    if (enlace) {
+      d.appendChild(document.createElement('br'));
+      const a = document.createElement('a'); a.href = enlace.url; a.target = '_blank'; a.textContent = enlace.texto; d.appendChild(a);
+    }
+    if (lineas && lineas.length) {
+      const ul = document.createElement('ul');
+      lineas.forEach(l => { const li = document.createElement('li'); li.textContent = '⚠ ' + l; ul.appendChild(li); });
+      d.appendChild(ul);
+    }
+    e.appendChild(d);
+  }
+
+  function generar() {
+    const t = tipo();
+    if (t === 'cierre' && new Date().toISOString().slice(0, 10) < D.fin
+        && !confirm('El ejercicio todavía no ha terminado. ¿Generar igualmente el informe de cierre?')) return;
+    if (t === 'actividad' && !sel.value) { mostrar('error', 'Crea antes una hoja de actividad.'); return; }
+    const b = document.getElementById('generar');
+    b.disabled = true;
+    mostrar('ok', 'Generando el PDF…');
+    google.script.run
+      .withSuccessHandler(r => { b.disabled = false; mostrar('ok', 'Informe generado', r.avisos, { url: r.url, texto: r.nombre }); })
+      .withFailureHandler(err => { b.disabled = false; mostrar('error', err.message || String(err)); })
+      .generarInforme({ tipo: t, fecha: document.getElementById('fecha').value, actividad: sel.value,
+                        movimientos: document.getElementById('movimientos').checked });
+  }
+</script>
+</body>
+</html>

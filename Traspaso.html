@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: Ubuntu, Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 4px 8px; }
+  .tipo { display: block; margin: 6px 0; }
+  label.campo { display: block; font-weight: bold; margin: 12px 0 4px; }
+  input[type=date], input[type=text] { width: 100%; box-sizing: border-box; padding: 6px; font-size: 14px; }
+  .nota { color: #666; font-size: 12px; margin-top: 8px; }
+  button { background: #6075BB; color: #fff; border: 0; border-radius: 4px; padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  button:disabled { background: #AAB3D6; }
+  .pie { margin-top: 16px; text-align: right; }
+  #estado { margin-top: 10px; }
+  .error { background: #FDECEA; border-left: 4px solid #D93025; padding: 8px 10px; }
+  .ok { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; }
+</style>
+</head>
+<body data-hoy="<?= hoy ?>">
+  <label class="tipo"><input type="radio" name="tipo" value="ingreso" checked> Ingreso de efectivo en el banco</label>
+  <label class="tipo"><input type="radio" name="tipo" value="retirada"> Retirada de efectivo del banco</label>
+
+  <label class="campo" for="fecha">Fecha</label>
+  <input type="date" id="fecha">
+  <label class="campo" for="importe">Importe (€)</label>
+  <input type="text" id="importe" placeholder="70,00" inputmode="decimal">
+  <label class="campo" for="descripcion">Descripción (opcional)</label>
+  <input type="text" id="descripcion" placeholder="Cuotas cobradas en la reunión de padres">
+  <div class="nota">Se crean dos filas con la partida Traspaso: una en el banco y otra en efectivo, con importes contrarios.
+    Las cuotas que forman ese efectivo tienen que estar ya apuntadas en Efectivo, cada una con su ID de socio.</div>
+
+  <div class="pie">
+    <button onclick="google.script.host.close()" style="background:#888">Cerrar</button>
+    <button id="apuntar" onclick="apuntar()">Apuntar</button>
+  </div>
+  <div id="estado"></div>
+
+<script>
+  document.getElementById('fecha').value = document.body.dataset.hoy;
+  function estado(clase, texto) {
+    const e = document.getElementById('estado');
+    e.innerHTML = ''; const d = document.createElement('div'); d.className = clase; d.textContent = texto; e.appendChild(d);
+  }
+  function apuntar() {
+    const b = document.getElementById('apuntar');
+    b.disabled = true;
+    google.script.run
+      .withSuccessHandler(t => { b.disabled = false; estado('ok', t); document.getElementById('importe').value = ''; })
+      .withFailureHandler(err => { b.disabled = false; estado('error', err.message || String(err)); })
+      .apuntarTraspaso({
+        tipo: document.querySelector('input[name=tipo]:checked').value,
+        fecha: document.getElementById('fecha').value,
+        importe: document.getElementById('importe').value,
+        descripcion: document.getElementById('descripcion').value
+      });
+  }
+</script>
+</body>
+</html>

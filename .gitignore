@@ -1,0 +1,24 @@
+# Configuración de ESTA instalación: IDs de Drive, ID de BD Socios, IBAN.
+# No se publica. clasp SÍ lo sube: lee .claspignore, no .gitignore.
+Config.js
+
+# Credenciales e ID del proyecto de clasp.
+.clasp.json
+.clasprc.json
+
+# Datos económicos y personales. Un extracto bancario lleva nombres de
+# familias y de menores en el concepto de cada transferencia: no puede
+# acabar en un repositorio por descuido, ni como "dato de prueba".
+# Las pruebas usan siempre nombres inventados (07_Diagnostico.js).
+*.xls
+*.xlsx
+*.xlsm
+*.ods
+*.csv
+*.pdf
+datos/
+extractos/
+
+# macOS y Node
+.DS_Store
+node_modules/

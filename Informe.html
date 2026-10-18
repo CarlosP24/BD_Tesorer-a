@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Conversor HTML→PDF de Apps Script: solo tablas, medidas verticales
+     en mm, nada de flex ni position (CLAUDE.md §4). */
+  body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #222; margin: 0; }
+  div.margen { padding: 14mm 14mm 14mm 14mm; }
+  table { border-collapse: collapse; width: 100%; }
+  h1 { font-size: 16pt; color: #6075BB; margin: 0 0 1mm; }
+  h2 { font-size: 11.5pt; color: #fff; background: #6075BB; padding: 1.5mm 2mm; margin: 6mm 0 2mm; }
+  h3 { font-size: 10.5pt; color: #18A2B5; margin: 4mm 0 1.5mm; }
+  td, th { padding: 1.2mm 1.8mm; vertical-align: top; }
+  table.datos th { background: #E8ECF7; text-align: left; font-weight: bold; border-bottom: 1px solid #6075BB; }
+  table.datos td { border-bottom: 1px solid #E3E3E3; }
+  table.datos tr.total td { font-weight: bold; border-top: 1px solid #6075BB; border-bottom: 0; }
+  .num, table.datos th.num { text-align: right; white-space: nowrap; }
+  .neg { color: #B3261E; }
+  .gris { color: #777; }
+  .aviso { background: #FFF6E5; border-left: 3px solid #D9A441; padding: 2mm 3mm; margin: 2mm 0; }
+  .ok { color: #2E7D32; }
+  .cab td { vertical-align: middle; }
+  .linea { border-top: 3px solid #18A2B5; margin: 2mm 0 4mm; }
+  .firma td { padding-top: 22mm; text-align: center; width: 50%; }
+  .firma span { border-top: 1px solid #555; padding: 1mm 12mm 0; }
+</style>
+</head>
+<body><div class="margen">
+<?
+  const E = n => euros(n);
+  const C = n => (n < 0 ? ' neg' : '');
+?>
+
+<table class="cab"><tr>
+  <? if (d.meta.logo) { ?><td style="width:28mm"><img src="<?!= d.meta.logo ?>" style="width:24mm"></td><? } ?>
+  <td>
+    <h1><?= d.meta.titulo ?><? if (d.tipo === 'actividad') { ?>: <?= d.titulo ?><? } ?></h1>
+    <div><?= d.meta.centro ?><? if (d.meta.codigo) { ?> (<?= d.meta.codigo ?>)<? } ?> · Ejercicio <?= d.meta.ejercicio ?></div>
+    <div class="gris">Movimientos hasta el <?= d.meta.corte ?> (criterio de caja: fecha de pago) · Emitido el <?= d.meta.emitido ?></div>
+  </td>
+</tr></table>
+<div class="linea"></div>
+
+<? if (d.meta.antesDelFin) { ?>
+  <div class="aviso"><b>Borrador:</b> el ejercicio todavía no había terminado cuando se generó este informe de cierre.</div>
+<? } ?>
+
+<? if (d.tipo !== 'actividad') { ?>
+
+  <h2>1. Tesorería</h2>
+  <table class="datos">
+    <tr><th></th><th class="num">Banco</th><th class="num">Efectivo</th><th class="num">Total</th></tr>
+    <tr><td>Saldo inicial del ejercicio</td><td class="num"><?= E(d.saldos.inicial.banco) ?></td><td class="num"><?= E(d.saldos.inicial.efectivo) ?></td><td class="num"><?= E(d.saldos.inicial.total) ?></td></tr>
+    <tr class="total"><td>Saldo a <?= d.meta.corte ?></td><td class="num"><?= E(d.saldos.final.banco) ?></td><td class="num"><?= E(d.saldos.final.efectivo) ?></td><td class="num"><?= E(d.saldos.final.total) ?></td></tr>
+  </table>
+  <h3>De dónde sale la variación</h3>
+  <table class="datos" style="width:70%">
+    <tr><td>Saldo inicial</td><td class="num"><?= E(d.cuadre.inicial) ?></td></tr>
+    <tr><td>+ Ingresos imputados a partidas</td><td class="num"><?= E(d.cuadre.ingresos) ?></td></tr>
+    <tr><td>− Gastos imputados a partidas</td><td class="num"><?= E(-d.cuadre.gastos) ?></td></tr>
+    <? if (d.cuadre.otros) { ?><tr><td>± Asientos sin partida o con partida desconocida</td><td class="num"><?= E(d.cuadre.otros) ?></td></tr><? } ?>
+    <? if (d.cuadre.traspasos) { ?><tr><td>± Traspasos banco/efectivo descuadrados</td><td class="num"><?= E(d.cuadre.traspasos) ?></td></tr><? } ?>
+    <tr class="total"><td>Saldo final</td><td class="num"><?= E(d.cuadre.final) ?></td></tr>
+  </table>
+  <? if (redondear(d.cuadre.diferencia) === 0) { ?>
+    <div class="ok">✓ Cuadra: saldo inicial + ingresos − gastos = saldo final.</div>
+  <? } else { ?>
+    <div class="aviso">No cuadra por <?= E(d.cuadre.diferencia) ?>.</div>
+  <? } ?>
+
+  <h2>2. Resultado por secciones</h2>
+  <table class="datos">
+    <tr><th>Sección</th><th class="num">Ingresos presup.</th><th class="num">Ingresos reales</th><th class="num">Gastos presup.</th><th class="num">Gastos reales</th><th class="num">Balance presup.</th><th class="num">Balance real</th></tr>
+    <? d.secciones.forEach(s => { ?>
+      <tr><td><?= s.seccion ?></td><td class="num"><?= E(s.presI) ?></td><td class="num"><?= E(s.realI) ?></td><td class="num"><?= E(s.presG) ?></td><td class="num"><?= E(s.realG) ?></td><td class="num<?= C(s.presI - s.presG) ?>"><?= E(s.presI - s.presG) ?></td><td class="num<?= C(s.realI - s.realG) ?>"><?= E(s.realI - s.realG) ?></td></tr>
+    <? }); ?>
+    <tr class="total"><td>Total</td><td class="num"><?= E(d.totales.presI) ?></td><td class="num"><?= E(d.totales.realI) ?></td><td class="num"><?= E(d.totales.presG) ?></td><td class="num"><?= E(d.totales.realG) ?></td><td class="num<?= C(d.totales.presI - d.totales.presG) ?>"><?= E(d.totales.presI - d.totales.presG) ?></td><td class="num<?= C(d.totales.realI - d.totales.realG) ?>"><?= E(d.totales.realI - d.totales.realG) ?></td></tr>
+  </table>
+
+  <? [['3. Ingresos por partida', d.ingresos], ['4. Gastos por partida', d.gastos]].forEach(bloque => { ?>
+    <h2><?= bloque[0] ?></h2>
+    <table class="datos">
+      <tr><th>Partida</th><th>Descripción</th><th class="num">Presupuestado</th><th class="num">Real</th><th class="num">Desviación</th><th class="num">% ejec.</th></tr>
+      <? bloque[1].forEach(p => { ?>
+        <tr><td><?= p.codigo ?></td><td><?= p.descripcion ?></td><td class="num"><?= E(p.importe) ?></td><td class="num"><?= E(p.real) ?></td><td class="num<?= C(p.desviacion) ?>"><?= E(p.desviacion) ?></td><td class="num"><?= p.pct === null ? '—' : p.pct + ' %' ?></td></tr>
+      <? }); ?>
+    </table>
+  <? }); ?>
+
+  <? if (d.actividades.length) { ?>
+    <h2>5. Actividades</h2>
+    <table class="datos">
+      <tr><th>Actividad</th><th class="num">Ingresos</th><th class="num">Gastos</th><th class="num">Balance</th><th class="num">Balance presup.</th></tr>
+      <? d.actividades.forEach(a => { ?>
+        <tr><td><?= a.titulo ?></td><td class="num"><?= E(a.resumen.realI) ?></td><td class="num"><?= E(a.resumen.realG) ?></td><td class="num<?= C(a.resumen.realB) ?>"><?= E(a.resumen.realB) ?></td><td class="num<?= C(a.resumen.presB) ?>"><?= E(a.resumen.presB) ?></td></tr>
+      <? }); ?>
+    </table>
+  <? } ?>
+
+  <? const hayAvisos = d.sinPartida.n || d.desconocidas.length || redondear(d.traspasos) !== 0 || d.gastosSinFactura.length || d.descuadres.length; ?>
+  <? if (hayAvisos) { ?>
+    <h2>Pendiente de revisar</h2>
+    <? if (d.sinPartida.n) { ?><div class="aviso">Asientos sin partida: <?= d.sinPartida.n ?>, por <?= E(d.sinPartida.importe) ?>. No están en ninguna sección.</div><? } ?>
+    <? if (d.desconocidas.length) { ?><div class="aviso">Partidas usadas que no están en el presupuesto: <?= d.desconocidas.map(x => x.codigo + ' (' + E(x.importe) + ')').join(', ') ?>.</div><? } ?>
+    <? if (redondear(d.traspasos) !== 0) { ?><div class="aviso">Los traspasos entre banco y efectivo no suman cero (<?= E(d.traspasos) ?>): falta una de las dos patas.</div><? } ?>
+    <? if (d.descuadres.length) { ?><div class="aviso">Asientos donde el saldo calculado no coincide con el del banco: <?= d.descuadres.length ?> (el primero, <?= d.descuadres[0].id ?>).</div><? } ?>
+    <? if (d.gastosSinFactura.length) { ?>
+      <h3>Pagos sin factura</h3>
+      <table class="datos">
+        <tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Partida</th><th class="num">Importe</th></tr>
+        <? d.gastosSinFactura.forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.partida ?></td><td class="num neg"><?= E(m.cantidad) ?></td></tr><? }); ?>
+      </table>
+    <? } ?>
+  <? } ?>
+
+  <? if (d.tipo === 'cierre') { ?>
+    <table class="firma"><tr><td><span>El/la tesorero/a</span></td><td><span>V.º B.º El/la presidente/a</span></td></tr></table>
+  <? } ?>
+
+  <? if (d.conMovimientos) { ?>
+    <h2 style="page-break-before: always">Anexo: relación de movimientos (<?= d.numAsientos ?>)</h2>
+    <table class="datos">
+      <tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Partida</th><th>Cuenta</th><th class="num">Importe</th><th>Fact.</th></tr>
+      <? d.movimientos.forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.partida ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><td><?= m.cantidad < 0 ? (m.factura ? 'Sí' : '—') : '' ?></td></tr><? }); ?>
+    </table>
+  <? } ?>
+
+<? } else { ?>
+
+  <table class="datos" style="width:70%">
+    <tr><td>Partida de ingresos</td><td><?= d.partidaIngresos ?></td></tr>
+    <tr><td>Partida de gastos</td><td><?= d.partidaGastos ?></td></tr>
+  </table>
+
+  <h2>1. Resumen</h2>
+  <table class="datos">
+    <tr><th></th><th class="num">Presupuestado</th><th class="num">Real</th><th class="num">Diferencia</th></tr>
+    <tr><td>Ingresos</td><td class="num"><?= E(d.resumen.presI) ?></td><td class="num"><?= E(d.resumen.realI) ?></td><td class="num<?= C(d.resumen.realI - d.resumen.presI) ?>"><?= E(d.resumen.realI - d.resumen.presI) ?></td></tr>
+    <tr><td>Gastos</td><td class="num"><?= E(d.resumen.presG) ?></td><td class="num"><?= E(d.resumen.realG) ?></td><td class="num"><?= E(d.resumen.realG - d.resumen.presG) ?></td></tr>
+    <tr class="total"><td>Balance</td><td class="num<?= C(d.resumen.presB) ?>"><?= E(d.resumen.presB) ?></td><td class="num<?= C(d.resumen.realB) ?>"><?= E(d.resumen.realB) ?></td><td class="num<?= C(d.resumen.realB - d.resumen.presB) ?>"><?= E(d.resumen.realB - d.resumen.presB) ?></td></tr>
+  </table>
+
+  <? if (d.subpartidas.length) { ?>
+    <h2>2. Subpartidas</h2>
+    <table class="datos">
+      <tr><th>Código</th><th>Descripción</th><th class="num">Presupuestado</th><th class="num">Real</th><th class="num">Diferencia</th></tr>
+      <? d.subpartidas.forEach(s => { ?><tr><td><?= s.codigo ?></td><td><?= s.descripcion ?></td><td class="num"><?= E(s.presupuesto) ?></td><td class="num"><?= E(s.real) ?></td><td class="num"><?= E(s.diferencia) ?></td></tr><? }); ?>
+      <? if (d.sinSubpartida.ingresos) { ?><tr><td></td><td class="gris">Ingresos sin subpartida</td><td></td><td class="num"><?= E(d.sinSubpartida.ingresos) ?></td><td></td></tr><? } ?>
+      <? if (d.sinSubpartida.gastos) { ?><tr><td></td><td class="gris">Gastos sin subpartida</td><td></td><td class="num"><?= E(d.sinSubpartida.gastos) ?></td><td></td></tr><? } ?>
+    </table>
+  <? } ?>
+
+  <? [['Ingresos', d.movIngresos], ['Gastos', d.movGastos]].forEach(bloque => { ?>
+    <h2><?= bloque[0] ?> (<?= bloque[1].length ?>)</h2>
+    <? if (!bloque[1].length) { ?><div class="gris">Ninguno.</div><? } else { ?>
+    <table class="datos">
+      <tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Subpartida</th><th>Cuenta</th><th class="num">Importe</th><? if (bloque[0] === 'Gastos') { ?><th>Fact.</th><? } ?></tr>
+      <? bloque[1].forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.subpartida || '—' ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><? if (bloque[0] === 'Gastos') { ?><td><?= m.factura ? 'Sí' : '—' ?></td><? } ?></tr><? }); ?>
+    </table>
+    <? } ?>
+  <? }); ?>
+
+  <? if (d.gastosSinFactura.length) { ?>
+    <div class="aviso">Pagos de esta actividad sin factura: <?= d.gastosSinFactura.map(m => m.id).join(', ') ?>.</div>
+  <? } ?>
+
+<? } ?>
+</div></body>
+</html>

@@ -1,0 +1,16 @@
+# Plantilla vacía de Config.js. NO puede subirse: declara un segundo
+# `const CONFIG` y en Apps Script todos los archivos comparten el mismo
+# espacio de nombres; las dos declaraciones juntas impiden cargar el
+# proyecto entero.
+Config.ejemplo.js
+
+# Documentación y pruebas: viven en el repositorio, no en Apps Script.
+CLAUDE.md
+README.md
+pruebas/**
+
+.git/**
+.gitignore
+.clasp.json
+.DS_Store
+node_modules/**

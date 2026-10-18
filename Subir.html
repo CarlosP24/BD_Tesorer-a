@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: Ubuntu, Arial, sans-serif; font-size: 14px; color: #222; margin: 0; padding: 4px 8px; }
+  p.ayuda { color: #555; margin: 0 0 14px; }
+  .zona { border: 2px dashed #18A2B5; border-radius: 6px; padding: 22px; text-align: center; background: #F5FBFC; }
+  .zona.encima { background: #E0F4F7; }
+  button { background: #6075BB; color: #fff; border: 0; border-radius: 4px; padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  button:disabled { background: #AAB3D6; cursor: default; }
+  #estado { margin-top: 14px; }
+  #estado ul { padding-left: 18px; margin: 6px 0; }
+  #estado li { margin: 3px 0; }
+  .error { background: #FDECEA; border-left: 4px solid #D93025; padding: 8px 10px; }
+  .ok { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; }
+  .pie { margin-top: 14px; text-align: right; }
+</style>
+</head>
+<body data-modo="<?= modo ?>" data-contexto="<?= contexto ?>">
+  <p class="ayuda"><?= ayuda ?></p>
+  <div class="zona" id="zona">
+    <input type="file" id="archivo" accept="<?= acepta ?>"><br><br>
+    <small>o arrastra aquí el archivo</small>
+  </div>
+  <label id="opcionSincronizar" style="display:none; margin-top:12px">
+    <input type="checkbox" id="sincronizar" checked>
+    Al terminar, apuntar en BD Socios las cuotas reconocidas
+    <div style="color:#666; font-size:12px; margin-left:22px">Desmárcalo si antes quieres revisar Caja (por ejemplo,
+      para marcar lo que es del ejercicio anterior). Luego: Tesorería → Sincronizar cuotas con BD Socios.</div>
+  </label>
+  <div class="pie">
+    <button id="cerrar" onclick="google.script.host.close()" style="background:#888">Cerrar</button>
+    <button id="subir" onclick="subir()">Subir y procesar</button>
+  </div>
+  <div id="estado"></div>
+
+<script>
+  const MODO = document.body.dataset.modo;
+  const CONTEXTO = document.body.dataset.contexto;   // JSON en texto
+  if (MODO === 'extracto') document.getElementById('opcionSincronizar').style.display = 'block';
+  const zona = document.getElementById('zona');
+  const entrada = document.getElementById('archivo');
+  zona.addEventListener('dragover', e => { e.preventDefault(); zona.classList.add('encima'); });
+  zona.addEventListener('dragleave', () => zona.classList.remove('encima'));
+  zona.addEventListener('drop', e => {
+    e.preventDefault(); zona.classList.remove('encima');
+    if (e.dataTransfer.files.length) entrada.files = e.dataTransfer.files;
+  });
+
+  function mostrar(clase, titulo, lineas) {
+    const est = document.getElementById('estado');
+    est.innerHTML = '';
+    const caja = document.createElement('div');
+    caja.className = clase;
+    const b = document.createElement('b'); b.textContent = titulo; caja.appendChild(b);
+    if (lineas && lineas.length) {
+      const ul = document.createElement('ul');
+      lineas.forEach(l => { const li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
+      caja.appendChild(ul);
+    }
+    est.appendChild(caja);
+  }
+
+  function subir() {
+    const f = entrada.files[0];
+    if (!f) { mostrar('error', 'Elige antes un archivo.'); return; }
+    const boton = document.getElementById('subir');
+    boton.disabled = true;
+    mostrar('ok', 'Procesando ' + f.name + '…');
+    const lector = new FileReader();
+    lector.onload = () => {
+      const base64 = String(lector.result).split(',')[1];
+      google.script.run
+        .withSuccessHandler(r => { boton.disabled = false; mostrar('ok', r.titulo, r.lineas); })
+        .withFailureHandler(err => { boton.disabled = false; mostrar('error', 'No se ha podido procesar', [err.message || String(err)]); })
+        .recibirArchivo({ modo: MODO, nombre: f.name, tipo: f.type, base64: base64, contexto: CONTEXTO,
+                         sincronizar: document.getElementById('sincronizar').checked });
+    };
+    lector.readAsDataURL(f);
+  }
+</script>
+</body>
+</html>

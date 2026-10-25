@@ -164,6 +164,15 @@ function pruebasTesoreria() {
   // --- IDs ---
   caso('ID siguiente del día', siguienteIdTransaccion(D(15, 10, 2026), ['20261015-01', '20261015-02', '20261014-05']), '20261015-03');
   caso('ID primero del día', siguienteIdTransaccion(D(1, 9, 2026), ['20261015-01']), '20260901-01');
+  const filaParaOrdenar = (pago, id) => {
+    const v = new Array(CAJA.COLUMNAS.length).fill('');
+    v[colCaja('ID Transacción') - 1] = id; v[colCaja('Fecha de pago') - 1] = pago;
+    return v;
+  };
+  caso('Orden de Caja: por fecha de pago, estable, vacías al final', ordenDeCaja([
+    filaParaOrdenar(D(3, 9, 2026), 'a'), filaParaOrdenar('', ''), filaParaOrdenar(D(1, 9, 2026), 'b'),
+    filaParaOrdenar(D(3, 9, 2026), 'c'), filaParaOrdenar(D(1, 9, 2026), 'd')]), [2, 4, 0, 3, 1]);
+  caso('Orden de Caja: ya ordenada', ordenDeCaja([filaParaOrdenar(D(1, 9, 2026), 'a'), filaParaOrdenar(D(2, 9, 2026), 'b')]), [0, 1]);
   caso('Número español', numeroDeTexto('-1.234,56 €'), -1234.56);
   caso('Fecha dd/mm/aaaa', fechaCompacta(fechaDeTexto('07/10/2026')), '20261007');
 

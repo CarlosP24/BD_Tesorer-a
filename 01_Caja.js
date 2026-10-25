@@ -215,20 +215,43 @@ function ordenarCaja(ss) {
   if (ultima <= P) return Math.max(0, ultima - P + 1);
   completarFilas(h, P, ultima);
 
-  // La ordenación de Sheets es estable: dentro del mismo día se conserva
-  // el orden de la hoja, que en lo importado es el del banco. Se quita un
-  // momento la fórmula del saldo para que la ordenación no la arrastre, y
-  // se vuelve a poner desde el código (no copiando la que había: Sheets
-  // la devuelve en el idioma de la hoja).
-  const celda = h.getRange(CAJA.FILA_CABECERA, colCaja('Saldo'));
-  celda.setValue('Saldo');
-  try {
-    h.getRange(P, 1, ultima - P + 1, CAJA.COLUMNAS.length)
-      .sort({ column: colCaja('Fecha de pago'), ascending: true });
-  } finally {
-    conFormulasEnIngles(ss, () => celda.setFormula(formulaDeSaldo()));
-  }
-  return ultima - P + 1;
+  // Se ordena en memoria y se reescribe saltándose la columna Saldo: así
+  // la fórmula de K3 no se toca. Con Range.sort() había que quitarla y
+  // volver a ponerla con conFormulasEnIngles(), y cambiar el idioma de la
+  // hoja hace que Sheets recargue la página: el diálogo de subida perdía
+  // la conexión («NetworkError»). Las notas viajan con su fila; una
+  // fórmula escrita a mano en una celda quedaría como su valor, por eso
+  // solo se reescribe desde la primera fila que cambia de sitio.
+  const n = ultima - P + 1, cols = CAJA.COLUMNAS.length;
+  const rango = h.getRange(P, 1, n, cols);
+  const valores = rango.getValues();
+  const orden = ordenDeCaja(valores);
+  const primera = orden.findIndex((j, i) => j !== i);
+  if (primera < 0) return n;
+
+  const notas = rango.getNotes();
+  const desde = P + primera;
+  const tramo = orden.slice(primera);
+  escribirFilasCaja(h, desde, tramo.map(j => valores[j]));
+  const iSaldo = colCaja('Saldo');
+  const notasTramo = tramo.map(j => notas[j]);
+  h.getRange(desde, 1, tramo.length, iSaldo - 1).setNotes(notasTramo.map(f => f.slice(0, iSaldo - 1)));
+  h.getRange(desde, iSaldo + 1, tramo.length, cols - iSaldo).setNotes(notasTramo.map(f => f.slice(iSaldo)));
+  return n;
+}
+
+/**
+ * Orden de las filas de Caja por Fecha de pago (puro). Devuelve los
+ * índices de `valores` en su nuevo orden. Es estable: dentro del mismo
+ * día se conserva el orden de la hoja, que en lo importado es el del
+ * banco. Lo que no tiene fecha de pago (filas vacías) va al final.
+ */
+function ordenDeCaja(valores) {
+  const iP = colCaja('Fecha de pago') - 1;
+  const clave = v => v[iP] instanceof Date ? v[iP].getTime() : Infinity;
+  return valores.map((v, i) => ({ i: i, k: clave(v) }))
+    .sort((a, b) => (a.k === b.k ? 0 : a.k < b.k ? -1 : 1) || a.i - b.i)
+    .map(x => x.i);
 }
 
 function ordenarCajaAhora() {

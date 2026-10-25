@@ -175,6 +175,12 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
   (`requireFormulaSatisfied`) y formato condicional (`whenFormulaSatisfied`).
   Nunca copies una fórmula con `getFormula()` para volver a ponerla: sale en
   el idioma de la hoja. Regénerala desde el código (`formulaDeSaldo()`).
+- **Pero cambiar el idioma de la hoja hace que Sheets recargue la página**:
+  un diálogo abierto (`google.script.run`) pierde la conexión con
+  «NetworkError». Por eso `conFormulasEnIngles()` solo se usa al montar o
+  reparar la estructura, nunca en lo que se hace a diario desde un diálogo.
+  `ordenarCaja()` ordena en memoria (`ordenDeCaja()`) y reescribe sin tocar
+  la columna Saldo, en vez de `Range.sort()` + volver a poner la fórmula.
 - **Nombres en `LET`/`LAMBDA` descriptivos**, nunca de una letra (`c`, `r`…
   pueden chocar con referencias).
 - **Protecciones estrictas solo donde el script no escribe al trabajar**
@@ -223,7 +229,7 @@ clasp push
 
 El código está probado en Node (lógica pura) y la plantilla del PDF se ha
 renderizado con Chrome, pero **no se ha ejecutado aún contra Sheets/Drive**.
-Lo primero que conviene mirar en la primera ejecución: que `Range.sort()`
-conserve el orden dentro del mismo día (es estable en Sheets, y la fila en
-rojo de «Saldo extracto» lo delataría), la conversión del `.xls` vía
+Lo primero que conviene mirar en la primera ejecución: que el orden de Caja
+conserve el del banco dentro del mismo día (la fila en rojo de «Saldo
+extracto» lo delataría), la conversión del `.xls` vía
 `Drive.Files.create`, y el aspecto del PDF con el conversor de Google.

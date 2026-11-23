@@ -374,6 +374,14 @@ function pruebasTesoreria() {
   caso('Actividad: resumen', act.resumen, { presI: 200, realI: 80, presG: 150, realG: 70, presB: 50, realB: 10 });
   caso('Actividad: subpartida', act.subpartidas.map(x => [x.codigo, x.real, x.diferencia]), [['G21T', 60, 10]]);
   caso('Actividad: sin subpartida', act.sinSubpartida, { ingresos: 80, gastos: 10 });
+  caso('Subpartidas por defecto: actividad', subpartidasPorDefecto('actividad', 'I21', 'G21').map(x => x[0]),
+    ['G21A', 'G21M', 'G21T', 'G21MT']);
+  caso('Subpartidas por defecto: financiación', subpartidasPorDefecto('financiacion', 'I31', 'G31'),
+    [['I31V', 'Ventas'], ['G31MT', 'Material'], ['G31P', 'Promoción']]);
+  caso('Subpartidas por defecto: sin partida de ingresos', subpartidasPorDefecto('financiacion', '', 'G31').map(x => x[0]),
+    ['G31MT', 'G31P']);
+  caso('Tipo de hoja por su metadato', [tipoDeActividad('1'), tipoDeActividad('financiacion'), tipoDeActividad('')],
+    ['actividad', 'financiacion', 'actividad']);
   caso('Saldos a una fecha', saldosALaFecha(mov, { banco: 1000, efectivo: 10 }, D(31, 8, 2027)), { banco: 1035, efectivo: 10 });
   caso('Descuadre con el banco', descuadresDeSaldo([
     filaCaja({ id: 'x', fecha: D(2, 9, 2026), cantidad: 20, saldoExtracto: 1020 }),

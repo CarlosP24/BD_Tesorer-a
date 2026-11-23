@@ -861,6 +861,7 @@ function onOpen() {
       .addItem('Vincular facturas subidas a la carpeta', 'vincularFacturasDeLaCarpeta'))
     .addSubMenu(ui.createMenu('Actividades')
       .addItem('Nueva hoja de actividad…', 'abrirNuevaActividad')
+      .addItem('Nueva hoja de financiación…', 'abrirNuevaFinanciacion')
       .addItem('Actualizar la lista de subpartidas', 'actualizarListaSubpartidasAhora'))
     .addItem('Generar informe contable…', 'abrirInformes')
     .addSeparator()

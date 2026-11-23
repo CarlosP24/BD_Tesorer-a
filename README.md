@@ -175,6 +175,11 @@ pasan a estar disponibles en Caja. A partir de la columna N puedes añadir
 columnas propias; mejor fórmulas de la misma fila que datos tecleados,
 porque los movimientos se recolocan cuando entra uno nuevo.
 
+**Actividades → Nueva hoja de financiación…**: la misma hoja («Fin · …») para
+una actividad con fin lucrativo (lotería, rastrillo…). Solo ofrece partidas
+de la sección 3, Financiación, y sus subpartidas por defecto son Ventas en
+ingresos y Material y Promoción en gastos: I31V, G31MT, G31P.
+
 ### Informes
 
 **Tesorería → Generar informe contable…**: cierre del ejercicio, provisional

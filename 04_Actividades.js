@@ -3,14 +3,20 @@
  *
  * Tesorería → Actividades → Nueva hoja de actividad… crea una hoja
  * "Act · <título>" para un par de partidas (una de ingresos y otra de
- * gastos; puede faltar una de las dos). La hoja tiene:
+ * gastos; puede faltar una de las dos). «Nueva hoja de financiación…»
+ * crea la misma hoja ("Fin · <título>") para una actividad con fin
+ * lucrativo, con partidas de la sección 3 (Financiación) y otras
+ * subpartidas por defecto (ACT.TIPOS). La hoja tiene:
  *
  *   - Resumen: presupuestado (de Presupuesto), real (de Caja) y
  *     diferencia, de ingresos, gastos y balance.
  *   - Subpartidas: código, descripción y presupuesto se escriben aquí;
- *     el real sale de Caja. Por defecto, las de la partida de gastos con
- *     A (Alojamiento), M (Manutención), T (Transporte) y MT (Material):
- *     G21A, G21M… Son las que luego se ofrecen en Caja.
+ *     el real sale de Caja. Por defecto, en una actividad, las de la
+ *     partida de gastos con A (Alojamiento), M (Manutención),
+ *     T (Transporte) y MT (Material): G21A, G21M…; en una de
+ *     financiación, V (Ventas) en ingresos y MT (Material) y
+ *     P (Promoción) en gastos: I31V, G31MT, G31P. Son las que luego se
+ *     ofrecen en Caja.
  *   - Movimientos: los asientos de Caja de esas partidas, con FILTER.
  *
  * Todo lo copiado está protegido. Las columnas a partir de la N son
@@ -20,12 +26,12 @@
  * las filas bajan y un dato tecleado quedaría al lado de otro asiento.
  *
  * La hoja se reconoce por sus metadatos (ACT.META), no por su nombre:
- * se puede renombrar.
+ * se puede renombrar. El valor del metadato es el tipo ('financiacion';
+ * '1' es una actividad, como las creadas antes de que hubiera tipos).
  *******************************************************************/
 
 const ACT = {
   META: 'tesoreria.actividad',
-  PREFIJO: 'Act · ',
   CELDA_TITULO: 'B1', CELDA_INGRESOS: 'B2', CELDA_GASTOS: 'B3',
   FILA_SUB_CAB: 10, PRIMERA_SUB: 11, FILAS_SUB: 12,
   FILA_SIN_SUB: 23,   // 23: ingresos sin subpartida; 24: gastos sin subpartida
@@ -34,23 +40,51 @@ const ACT = {
                  'Subpartida', 'ID socio', 'Proveedor', 'Cantidad', 'Factura', 'Método de pago'],
   PRIMERA_COLUMNA_LIBRE: 14,   // N
   COLUMNAS: 40,
-  SUBPARTIDAS: [['A', 'Alojamiento'], ['M', 'Manutención'], ['T', 'Transporte'], ['MT', 'Material']]
+  // Por tipo de hoja. seccion: '' = cualquier partida; si no, solo las de
+  // esa sección. Las subpartidas son sufijos del código de la partida.
+  TIPOS: {
+    actividad: {
+      meta: '1', prefijo: 'Act · ', etiqueta: 'Actividad', dialogo: 'Nueva hoja de actividad',
+      seccion: '', seccionPorDefecto: '2.', ejemplo: 'Convivencia de otoño', ejemploPartidas: 'I23 y G23',
+      subpartidas: { ingresos: [], gastos: [['A', 'Alojamiento'], ['M', 'Manutención'], ['T', 'Transporte'], ['MT', 'Material']] },
+      textoSubpartidas: 'Crear las subpartidas de gastos por defecto (Alojamiento, Manutención, Transporte y Material)'
+    },
+    financiacion: {
+      meta: 'financiacion', prefijo: 'Fin · ', etiqueta: 'Actividad de financiación', dialogo: 'Nueva hoja de financiación',
+      seccion: '3.', seccionPorDefecto: '3.', ejemplo: 'Lotería de Navidad', ejemploPartidas: 'I32 y G32',
+      subpartidas: { ingresos: [['V', 'Ventas']], gastos: [['MT', 'Material'], ['P', 'Promoción']] },
+      textoSubpartidas: 'Crear las subpartidas por defecto (Ventas en ingresos; Material y Promoción en gastos)'
+    }
+  }
 };
+
+/** Tipo de hoja ('actividad' o 'financiacion') a partir del valor del metadato. */
+function tipoDeActividad(valorMeta) {
+  return Object.keys(ACT.TIPOS).find(k => ACT.TIPOS[k].meta === String(valorMeta)) || 'actividad';
+}
+
+/** [[código, descripción]] de las subpartidas por defecto de una hoja nueva. Pura. */
+function subpartidasPorDefecto(tipo, ing, gas) {
+  const s = ACT.TIPOS[tipo].subpartidas;
+  return (ing ? s.ingresos.map(x => [ing + x[0], x[1]]) : [])
+    .concat(gas ? s.gastos.map(x => [gas + x[0], x[1]]) : []);
+}
 
 function esHojaDeActividad(h) {
   try { return h.getDeveloperMetadata().some(m => m.getKey() === ACT.META); }
   catch (e) { return false; }
 }
 
-/** [{ hoja, nombre, titulo, ingresos, gastos, subpartidas: [{ codigo, descripcion, presupuesto }] }] */
+/** [{ hoja, nombre, tipo, titulo, ingresos, gastos, subpartidas: [{ codigo, descripcion, presupuesto }] }] */
 function hojasDeActividad(ss) {
   return (ss || SpreadsheetApp.getActiveSpreadsheet()).getSheets().filter(esHojaDeActividad).map(h => {
+    const meta = h.getDeveloperMetadata().find(m => m.getKey() === ACT.META);
     const cab = h.getRange('B1:B3').getValues();
     const subs = h.getRange(ACT.PRIMERA_SUB, 1, ACT.FILAS_SUB, 3).getValues()
       .filter(f => String(f[0]).trim() !== '')
       .map(f => ({ codigo: String(f[0]).trim().toUpperCase(), descripcion: String(f[1] || '').trim(),
                    presupuesto: numeroDeTexto(f[2]) || 0 }));
-    return { hoja: h, nombre: h.getName(), titulo: String(cab[0][0] || h.getName()).trim(),
+    return { hoja: h, nombre: h.getName(), tipo: tipoDeActividad(meta ? meta.getValue() : ''), titulo: String(cab[0][0] || h.getName()).trim(),
       ingresos: String(cab[1][0] || '').trim().toUpperCase(), gastos: String(cab[2][0] || '').trim().toUpperCase(),
       subpartidas: subs };
   });
@@ -61,53 +95,70 @@ function hojasDeActividad(ss) {
 // CREAR
 // ==================================================================
 
-function abrirNuevaActividad() {
+function abrirNuevaActividad() { abrirDialogoDeActividad('actividad'); }
+function abrirNuevaFinanciacion() { abrirDialogoDeActividad('financiacion'); }
+
+function abrirDialogoDeActividad(tipo) {
+  const T = ACT.TIPOS[tipo];
   const p = leerPartidas();
+  const lista = xs => xs.filter(x => !T.seccion || x.seccion.indexOf(T.seccion) === 0)
+    .map(x => ({ codigo: x.codigo, texto: `${x.codigo} — ${x.descripcion}`, seccion: x.seccion }));
   const t = HtmlService.createTemplateFromFile('Actividad');
-  t.partidas = JSON.stringify({
-    ingresos: p.ingresos.map(x => ({ codigo: x.codigo, texto: `${x.codigo} — ${x.descripcion}`, seccion: x.seccion })),
-    gastos: p.gastos.map(x => ({ codigo: x.codigo, texto: `${x.codigo} — ${x.descripcion}`, seccion: x.seccion }))
-  });
-  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(480).setHeight(430), 'Nueva hoja de actividad');
+  t.partidas = JSON.stringify({ ingresos: lista(p.ingresos), gastos: lista(p.gastos) });
+  t.tipo = tipo;
+  t.seccionPorDefecto = T.seccionPorDefecto;
+  t.ejemplo = T.ejemplo;
+  t.ejemploPartidas = T.ejemploPartidas;
+  t.textoSubpartidas = T.textoSubpartidas;
+  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(480).setHeight(430), T.dialogo);
 }
 
-/** Lo llama Actividad.html. datos: { titulo, ingresos, gastos, subpartidas }. */
+/** Lo llama Actividad.html. datos: { tipo, titulo, ingresos, gastos, subpartidas }. */
 function crearHojaDeActividad(datos) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tipo = ACT.TIPOS[datos.tipo] ? datos.tipo : 'actividad';
+  const T = ACT.TIPOS[tipo];
   const titulo = String(datos.titulo || '').replace(/[\[\]*?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim();
   const ing = String(datos.ingresos || '').trim().toUpperCase();
   const gas = String(datos.gastos || '').trim().toUpperCase();
   if (!titulo) throw new Error('Falta el título.');
   if (!ing && !gas) throw new Error('Elige al menos una partida.');
   const p = leerPartidas(ss);
-  if (ing && !p.ingresos.some(x => x.codigo === ing)) throw new Error(`${ing} no está en el Presupuesto.`);
-  if (gas && !p.gastos.some(x => x.codigo === gas)) throw new Error(`${gas} no está en el Presupuesto.`);
+  const comprobar = (codigo, lista) => {
+    if (!codigo) return;
+    const x = lista.find(y => y.codigo === codigo);
+    if (!x) throw new Error(`${codigo} no está en el Presupuesto.`);
+    if (T.seccion && x.seccion.indexOf(T.seccion) !== 0) throw new Error(`${codigo} no es de la sección «${SECCIONES.find(n => n.indexOf(T.seccion) === 0)}».`);
+  };
+  comprobar(ing, p.ingresos);
+  comprobar(gas, p.gastos);
   const usada = hojasDeActividad(ss).find(a => (ing && a.ingresos === ing) || (gas && a.gastos === gas));
-  const nombre = (ACT.PREFIJO + titulo).slice(0, 90);
+  const nombre = (T.prefijo + titulo).slice(0, 90);
   if (ss.getSheetByName(nombre)) throw new Error(`Ya hay una hoja llamada «${nombre}».`);
 
   const ajustes = ss.getSheetByName(HOJAS.AJUSTES);
   const h = ss.insertSheet(nombre, ajustes ? ajustes.getIndex() - 1 : ss.getSheets().length);
   asegurarTamaño(h, 300, ACT.COLUMNAS);
-  h.addDeveloperMetadata(ACT.META, '1');
+  h.addDeveloperMetadata(ACT.META, T.meta);
   conFormulasEnIngles(ss, () => montarHojaDeActividad(h, titulo, ing, gas,
-    datos.subpartidas && gas ? ACT.SUBPARTIDAS.map(s => [gas + s[0], s[1]]) : []));
+    datos.subpartidas ? subpartidasPorDefecto(tipo, ing, gas) : [], T.etiqueta));
   protegerHojaDeActividad(h);
   actualizarListaSubpartidas(ss);
   ss.setActiveSheet(h);
-  registrar('INFO', `Hoja de actividad creada: ${nombre}`, `Ingresos ${ing || '—'} · Gastos ${gas || '—'}`);
+  registrar('INFO', `Hoja de ${tipo === 'financiacion' ? 'financiación' : 'actividad'} creada: ${nombre}`,
+    `Ingresos ${ing || '—'} · Gastos ${gas || '—'}`);
   return { nombre: nombre,
     aviso: usada ? `Ojo: la hoja «${usada.nombre}» ya usa alguna de estas partidas; las dos mostrarán los mismos asientos.` : '' };
 }
 
-function montarHojaDeActividad(h, titulo, ing, gas, subpartidas) {
+function montarHojaDeActividad(h, titulo, ing, gas, subpartidas, etiqueta) {
   const caja = HOJAS.CAJA, P = CAJA.PRIMERA_FILA;
   const cc = nombre => `${caja}!$${letraCaja(nombre)}$${P}:$${letraCaja(nombre)}`;
   const pres = HOJAS.PRESUPUESTO, PP = PRESUPUESTO.PRIMERA_FILA;
   const AZUL = '#6075BB', TURQUESA = '#18A2B5', GRIS = '#F3F3F3';
 
   // Cabecera.
-  h.getRange('A1:A3').setValues([['Actividad'], ['Partida de ingresos'], ['Partida de gastos']]).setFontWeight('bold');
+  h.getRange('A1:A3').setValues([[etiqueta || 'Actividad'], ['Partida de ingresos'], ['Partida de gastos']]).setFontWeight('bold');
   h.getRange('B1').setValue(titulo).setFontSize(14).setFontWeight('bold');
   h.getRange('B2:B3').setNumberFormat('@').setValues([[ing], [gas]]);
   h.getRange('C2').setFormula(`=IF(B2="", "—", IFERROR(VLOOKUP(B2, ${pres}!$A$${PP}:$C, 3, FALSE), "⚠ No está en el Presupuesto"))`);

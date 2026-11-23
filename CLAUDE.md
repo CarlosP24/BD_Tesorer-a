@@ -41,7 +41,7 @@ los cursos). Hojas:
 | `Caja` | Libro de asientos. Filas 1-2: saldos (inicial en B1 banco / C1 efectivo, rangos con nombre `SALDO_INICIAL_BANCO` / `_EFECTIVO`; actual en B2:D2). Fila 3: cabecera. Datos desde la 4 |
 | `Presupuesto` | Resumen por sección (filas 1-5) y tabla de partidas desde la fila 11: ingresos en A-D, gastos en E-H |
 | `Cuentas` | Espejo del Presupuesto con importes reales. **Solo fórmulas** |
-| `Act · …` | Hojas de actividad (se reconocen por metadatos `tesoreria.actividad`, no por el nombre) |
+| `Act · …`, `Fin · …` | Hojas de actividad y de financiación (se reconocen por metadatos `tesoreria.actividad`, no por el nombre; el valor es el tipo, `ACT.TIPOS`) |
 | `Ajustes` | Ejercicio, fechas, curso de BD Socios, partida de cuotas por tramo, ejercicio anterior |
 | `Log` | Auditoría |
 | `_Listas` | Oculta: listas de los desplegables |

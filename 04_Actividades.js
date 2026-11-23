@@ -6,7 +6,11 @@
  * gastos; puede faltar una de las dos). «Nueva hoja de financiación…»
  * crea la misma hoja ("Fin · <título>") para una actividad con fin
  * lucrativo, con partidas de la sección 3 (Financiación) y otras
- * subpartidas por defecto (ACT.TIPOS). La hoja tiene:
+ * subpartidas por defecto (ACT.TIPOS). Por defecto crea también sus
+ * partidas en el Presupuesto: el primer número libre a la vez en I y G
+ * de la sección 2 (actividad) o 3 (financiación), con el título como
+ * descripción y sin importe (siguientePartidaLibre(), añadirPartida()).
+ * También se puede elegir una partida que ya exista. La hoja tiene:
  *
  *   - Resumen: presupuestado (de Presupuesto), real (de Caja) y
  *     diferencia, de ingresos, gastos y balance.
@@ -40,18 +44,20 @@ const ACT = {
                  'Subpartida', 'ID socio', 'Proveedor', 'Cantidad', 'Factura', 'Método de pago'],
   PRIMERA_COLUMNA_LIBRE: 14,   // N
   COLUMNAS: 40,
-  // Por tipo de hoja. seccion: '' = cualquier partida; si no, solo las de
-  // esa sección. Las subpartidas son sufijos del código de la partida.
+  // Por tipo de hoja. seccion: partidas existentes que se ofrecen ('' =
+  // todas). seccionNueva: donde se crean sus partidas nuevas. Las
+  // subpartidas son sufijos del código de la partida.
+  NUEVA: '+nueva',   // valor del desplegable: crear la partida
   TIPOS: {
     actividad: {
       meta: '1', prefijo: 'Act · ', etiqueta: 'Actividad', dialogo: 'Nueva hoja de actividad',
-      seccion: '', seccionPorDefecto: '2.', ejemplo: 'Convivencia de otoño', ejemploPartidas: 'I23 y G23',
+      seccion: '', seccionNueva: 2, ejemplo: 'Convivencia de otoño',
       subpartidas: { ingresos: [], gastos: [['A', 'Alojamiento'], ['M', 'Manutención'], ['T', 'Transporte'], ['MT', 'Material']] },
       textoSubpartidas: 'Crear las subpartidas de gastos por defecto (Alojamiento, Manutención, Transporte y Material)'
     },
     financiacion: {
       meta: 'financiacion', prefijo: 'Fin · ', etiqueta: 'Actividad de financiación', dialogo: 'Nueva hoja de financiación',
-      seccion: '3.', seccionPorDefecto: '3.', ejemplo: 'Lotería de Navidad', ejemploPartidas: 'I32 y G32',
+      seccion: '3.', seccionNueva: 3, ejemplo: 'Lotería de Navidad',
       subpartidas: { ingresos: [['V', 'Ventas']], gastos: [['MT', 'Material'], ['P', 'Promoción']] },
       textoSubpartidas: 'Crear las subpartidas por defecto (Ventas en ingresos; Material y Promoción en gastos)'
     }
@@ -103,38 +109,51 @@ function abrirDialogoDeActividad(tipo) {
   const p = leerPartidas();
   const lista = xs => xs.filter(x => !T.seccion || x.seccion.indexOf(T.seccion) === 0)
     .map(x => ({ codigo: x.codigo, texto: `${x.codigo} — ${x.descripcion}`, seccion: x.seccion }));
+  const num = siguientePartidaLibre(p, T.seccionNueva);
   const t = HtmlService.createTemplateFromFile('Actividad');
-  t.partidas = JSON.stringify({ ingresos: lista(p.ingresos), gastos: lista(p.gastos) });
+  t.partidas = JSON.stringify({ ingresos: lista(p.ingresos), gastos: lista(p.gastos), nueva: ACT.NUEVA,
+    nuevaIngresos: `I${T.seccionNueva}${num}`, nuevaGastos: `G${T.seccionNueva}${num}` });
   t.tipo = tipo;
-  t.seccionPorDefecto = T.seccionPorDefecto;
   t.ejemplo = T.ejemplo;
-  t.ejemploPartidas = T.ejemploPartidas;
   t.textoSubpartidas = T.textoSubpartidas;
-  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(480).setHeight(430), T.dialogo);
+  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(480).setHeight(470), T.dialogo);
 }
 
-/** Lo llama Actividad.html. datos: { tipo, titulo, ingresos, gastos, subpartidas }. */
+/**
+ * Lo llama Actividad.html. datos: { tipo, titulo, ingresos, gastos, subpartidas };
+ * ingresos o gastos = ACT.NUEVA crea la partida en el Presupuesto, con el
+ * título como descripción y sin importe.
+ */
 function crearHojaDeActividad(datos) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tipo = ACT.TIPOS[datos.tipo] ? datos.tipo : 'actividad';
   const T = ACT.TIPOS[tipo];
   const titulo = String(datos.titulo || '').replace(/[\[\]*?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim();
-  const ing = String(datos.ingresos || '').trim().toUpperCase();
-  const gas = String(datos.gastos || '').trim().toUpperCase();
+  const nuevaI = datos.ingresos === ACT.NUEVA, nuevaG = datos.gastos === ACT.NUEVA;
   if (!titulo) throw new Error('Falta el título.');
-  if (!ing && !gas) throw new Error('Elige al menos una partida.');
+  if (!datos.ingresos && !datos.gastos) throw new Error('Elige al menos una partida.');
   const p = leerPartidas(ss);
+  // El número se calcula ahora, no al abrir el diálogo: alguien puede
+  // haber añadido partidas mientras tanto.
+  const num = siguientePartidaLibre(p, T.seccionNueva);
+  const ing = nuevaI ? `I${T.seccionNueva}${num}` : String(datos.ingresos || '').trim().toUpperCase();
+  const gas = nuevaG ? `G${T.seccionNueva}${num}` : String(datos.gastos || '').trim().toUpperCase();
   const comprobar = (codigo, lista) => {
     if (!codigo) return;
     const x = lista.find(y => y.codigo === codigo);
     if (!x) throw new Error(`${codigo} no está en el Presupuesto.`);
     if (T.seccion && x.seccion.indexOf(T.seccion) !== 0) throw new Error(`${codigo} no es de la sección «${SECCIONES.find(n => n.indexOf(T.seccion) === 0)}».`);
   };
-  comprobar(ing, p.ingresos);
-  comprobar(gas, p.gastos);
-  const usada = hojasDeActividad(ss).find(a => (ing && a.ingresos === ing) || (gas && a.gastos === gas));
+  if (!nuevaI) comprobar(ing, p.ingresos);
+  if (!nuevaG) comprobar(gas, p.gastos);
+  const usada = hojasDeActividad(ss).find(a => (ing && !nuevaI && a.ingresos === ing) || (gas && !nuevaG && a.gastos === gas));
   const nombre = (T.prefijo + titulo).slice(0, 90);
   if (ss.getSheetByName(nombre)) throw new Error(`Ya hay una hoja llamada «${nombre}».`);
+
+  const creadas = [];
+  if (nuevaI) { añadirPartida(ss, ing, titulo); creadas.push(ing); }
+  if (nuevaG) { añadirPartida(ss, gas, titulo); creadas.push(gas); }
+  if (creadas.length) SpreadsheetApp.flush();
 
   const ajustes = ss.getSheetByName(HOJAS.AJUSTES);
   const h = ss.insertSheet(nombre, ajustes ? ajustes.getIndex() - 1 : ss.getSheets().length);
@@ -146,8 +165,8 @@ function crearHojaDeActividad(datos) {
   actualizarListaSubpartidas(ss);
   ss.setActiveSheet(h);
   registrar('INFO', `Hoja de ${tipo === 'financiacion' ? 'financiación' : 'actividad'} creada: ${nombre}`,
-    `Ingresos ${ing || '—'} · Gastos ${gas || '—'}`);
-  return { nombre: nombre,
+    `Ingresos ${ing || '—'} · Gastos ${gas || '—'}` + (creadas.length ? ` · Partidas nuevas: ${creadas.join(', ')}` : ''));
+  return { nombre: nombre, partidasNuevas: creadas,
     aviso: usada ? `Ojo: la hoja «${usada.nombre}» ya usa alguna de estas partidas; las dos mostrarán los mismos asientos.` : '' };
 }
 

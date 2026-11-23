@@ -598,6 +598,38 @@ function leerPartidas(ss) {
 }
 
 
+/**
+ * Número de la primera partida libre de una sección (1-4) a la vez en
+ * ingresos y en gastos, para que las dos vayan emparejadas: con I21, I22,
+ * G21 y G22, 3 (I23 y G23). Pura.
+ */
+function siguientePartidaLibre(partidas, seccion) {
+  const usados = partidas.ingresos.concat(partidas.gastos)
+    .filter(x => PATRON_PARTIDA.test(x.codigo) && x.codigo.charAt(1) === String(seccion))
+    .map(x => parseInt(x.codigo.slice(2), 10));
+  return usados.length ? Math.max.apply(null, usados) + 1 : 1;
+}
+
+/**
+ * Añade una partida al final de su lado de la tabla del Presupuesto
+ * (A-D ingresos, E-H gastos), sin importe. La sección y Cuentas salen
+ * solas por fórmula.
+ */
+function añadirPartida(ss, codigo, descripcion) {
+  const h = ss.getSheetByName(HOJAS.PRESUPUESTO);
+  const P = PRESUPUESTO.PRIMERA_FILA;
+  const col = codigo.charAt(0) === 'I' ? 1 : 5;
+  const n = h.getMaxRows() - P + 1;
+  const v = n > 0 ? h.getRange(P, col, n, 1).getValues() : [];
+  let ultima = -1;
+  v.forEach((f, i) => { if (String(f[0]).trim() !== '') ultima = i; });
+  const fila = P + ultima + 1;
+  if (fila > h.getMaxRows()) h.insertRowsAfter(h.getMaxRows(), 50);
+  h.getRange(fila, col).setNumberFormat('@').setValue(codigo);
+  h.getRange(fila, col + 2).setValue(descripcion);
+  return fila;
+}
+
 // ==================================================================
 // AJUSTES, LISTAS Y LOG
 // ==================================================================

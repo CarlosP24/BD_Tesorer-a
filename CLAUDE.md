@@ -105,7 +105,10 @@ ellas por letra: **no se insertan ni se mueven columnas en Caja.**
   hay dos candidatos no se elige: se importa como nuevo y se avisa en una nota.
 - **Las partidas se pueden añadir en cualquier momento.** Todo lo que depende
   de ellas (Cuentas, `_Listas`, validación de Caja) es fórmula abierta.
-  Código `[IG][1-4]\d+`; la sección se deduce del dígito.
+  Código `[IG][1-4]\d+`; la sección se deduce del dígito. Una hoja de
+  actividad nueva crea por defecto las suyas (`siguientePartidaLibre()`:
+  mismo número en I y G; `añadirPartida()`: al final de su lado de la
+  tabla, solo código y descripción).
 - **Lo que escribe una persona manda**: la importación y la sincronización
   solo rellenan Partida, Método, etc. si están vacíos.
 - **Un ejercicio cerrado conserva su código.** «Crear el ejercicio siguiente»

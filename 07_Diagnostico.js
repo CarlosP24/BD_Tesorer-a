@@ -380,6 +380,11 @@ function pruebasTesoreria() {
     [['I31V', 'Ventas'], ['G31MT', 'Material'], ['G31P', 'Promoción']]);
   caso('Subpartidas por defecto: sin partida de ingresos', subpartidasPorDefecto('financiacion', '', 'G31').map(x => x[0]),
     ['G31MT', 'G31P']);
+  const sembradas = { ingresos: PRESUPUESTO.INGRESOS.map(x => ({ codigo: x[0] })), gastos: PRESUPUESTO.GASTOS.map(x => ({ codigo: x[0] })) };
+  caso('Partida nueva: actividad y financiación', [siguientePartidaLibre(sembradas, 2), siguientePartidaLibre(sembradas, 3)], [3, 2]);
+  caso('Partida nueva: libre en los dos lados', siguientePartidaLibre({ ingresos: [{ codigo: 'I21' }, { codigo: 'I23' }],
+    gastos: [{ codigo: 'G24' }, { codigo: 'G31' }] }, 2), 5);
+  caso('Partida nueva: sección vacía', siguientePartidaLibre({ ingresos: [{ codigo: 'I11' }], gastos: [] }, 3), 1);
   caso('Tipo de hoja por su metadato', [tipoDeActividad('1'), tipoDeActividad('financiacion'), tipoDeActividad('')],
     ['actividad', 'financiacion', 'actividad']);
   caso('Saldos a una fecha', saldosALaFecha(mov, { banco: 1000, efectivo: 10 }, D(31, 8, 2027)), { banco: 1035, efectivo: 10 });

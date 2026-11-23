@@ -168,7 +168,10 @@ a la carpeta** las enlaza.
 ### Actividades
 
 **Actividades → Nueva hoja de actividad…**: título, partida de ingresos y de
-gastos. La hoja muestra presupuesto, real y los movimientos, que se
+gastos. Por defecto crea partidas nuevas en el Presupuesto (las siguientes
+libres de la sección 2, emparejadas: I23 y G23), con el título como
+descripción; su importe presupuestado se pone luego en el Presupuesto.
+También se puede elegir una partida que ya exista. La hoja muestra presupuesto, real y los movimientos, que se
 actualizan solos. Las subpartidas (por defecto Alojamiento, Manutención,
 Transporte y Material: G21A, G21M, G21T, G21MT) se editan en la propia hoja y
 pasan a estar disponibles en Caja. A partir de la columna N puedes añadir
@@ -177,7 +180,7 @@ porque los movimientos se recolocan cuando entra uno nuevo.
 
 **Actividades → Nueva hoja de financiación…**: la misma hoja («Fin · …») para
 una actividad con fin lucrativo (lotería, rastrillo…). Solo ofrece partidas
-de la sección 3, Financiación, y sus subpartidas por defecto son Ventas en
+de la sección 3, Financiación (y las nuevas las crea ahí: I32 y G32), y sus subpartidas por defecto son Ventas en
 ingresos y Material y Promoción en gastos: I31V, G31MT, G31P.
 
 ### Informes

@@ -16,7 +16,7 @@
   .ok { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; }
 </style>
 </head>
-<body data-partidas="<?= partidas ?>" data-tipo="<?= tipo ?>" data-seccion="<?= seccionPorDefecto ?>">
+<body data-partidas="<?= partidas ?>" data-tipo="<?= tipo ?>">
   <label for="titulo">Título</label>
   <input type="text" id="titulo" placeholder="<?= ejemplo ?>">
 
@@ -25,8 +25,9 @@
 
   <label for="gastos">Partida de gastos</label>
   <select id="gastos"></select>
-  <div class="nota">Si falta la partida, añádela antes en la hoja Presupuesto (por ejemplo <?= ejemploPartidas ?>).<? if (tipo === 'financiacion') { ?>
-    Solo se ofrecen las de la sección 3, Financiación.<? } ?></div>
+  <div class="nota">Una partida nueva se añade al final del Presupuesto con el título como descripción;
+    pon allí su importe presupuestado.<? if (tipo === 'financiacion') { ?>
+    Las que ya existen solo se ofrecen si son de la sección 3, Financiación.<? } ?></div>
 
   <label class="check"><input type="checkbox" id="subpartidas" checked>
     <?= textoSubpartidas ?></label>
@@ -39,17 +40,17 @@
 
 <script>
   const P = JSON.parse(document.body.dataset.partidas);
-  function llenar(id, lista) {
-    const s = document.getElementById(id);
-    const vacio = document.createElement('option'); vacio.value = ''; vacio.textContent = '(ninguna)'; s.appendChild(vacio);
-    lista.forEach(p => {
-      const o = document.createElement('option'); o.value = p.codigo; o.textContent = p.texto;
-      if (!s.dataset.elegida && p.seccion.indexOf(document.body.dataset.seccion) === 0) { o.selected = true; s.dataset.elegida = '1'; }
-      s.appendChild(o);
-    });
+  function opcion(s, valor, texto) {
+    const o = document.createElement('option'); o.value = valor; o.textContent = texto; s.appendChild(o); return o;
   }
-  llenar('ingresos', P.ingresos);
-  llenar('gastos', P.gastos);
+  function llenar(id, lista, nueva) {
+    const s = document.getElementById(id);
+    opcion(s, P.nueva, 'Nueva partida ' + nueva).selected = true;
+    lista.forEach(p => opcion(s, p.codigo, p.texto));
+    opcion(s, '', '(ninguna)');
+  }
+  llenar('ingresos', P.ingresos, P.nuevaIngresos);
+  llenar('gastos', P.gastos, P.nuevaGastos);
 
   function estado(clase, texto) {
     const e = document.getElementById('estado');

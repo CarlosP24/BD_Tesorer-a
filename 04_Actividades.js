@@ -271,28 +271,53 @@ function protegerHojaDeActividad(h) {
 function alEditarActividad(e) {
   const r = e.range;
   const fin = ACT.PRIMERA_SUB + ACT.FILAS_SUB - 1;
-  if (r.getColumn() <= 1 && r.getLastColumn() >= 1 && r.getLastRow() >= ACT.PRIMERA_SUB && r.getRow() <= fin) {
-    actualizarListaSubpartidas(e.source);
-  }
+  // Código o descripción de una subpartida, o el título (sale en la lista).
+  const subs = r.getColumn() <= 2 && r.getLastColumn() >= 1 && r.getLastRow() >= ACT.PRIMERA_SUB && r.getRow() <= fin;
+  const titulo = r.getRow() <= 1 && r.getColumn() <= 2 && r.getLastColumn() >= 2;
+  if (subs || titulo) actualizarListaSubpartidas(e.source);
 }
 
-/** Reescribe la lista de subpartidas que ofrece Caja (en _Listas). */
+/**
+ * Reescribe la lista de subpartidas que ofrece Caja (en _Listas): primero
+ * «G21A · Alojamiento (Convivencia de otoño)», para buscar por el nombre,
+ * y después los códigos solos, que es lo que queda en la celda (ver
+ * CAJA.SEPARADOR_OPCION).
+ */
 function actualizarListaSubpartidas(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   const listas = ss.getSheetByName(HOJAS.LISTAS);
   if (!listas) return [];
-  const codigos = [];
-  hojasDeActividad(ss).forEach(a => a.subpartidas.forEach(s => {
-    if (codigos.indexOf(s.codigo) < 0) codigos.push(s.codigo);
-  }));
-  codigos.sort();
+  const subs = listaDeSubpartidas(hojasDeActividad(ss));
+  const opciones = opcionesDeSubpartidas(subs);
   listas.getRange('B2:B').clearContent();
-  if (codigos.length) listas.getRange(2, 2, codigos.length, 1).setValues(codigos.map(c => [c]));
-  return codigos;
+  if (opciones.length) {
+    if (listas.getMaxRows() < opciones.length + 1) listas.insertRowsAfter(listas.getMaxRows(), opciones.length + 1 - listas.getMaxRows());
+    listas.getRange(2, 2, opciones.length, 1).setValues(opciones.map(c => [c]));
+  }
+  return subs.map(s => s.codigo);
+}
+
+/** [{ codigo, descripcion, actividad }] sin repetir, por código. Pura. */
+function listaDeSubpartidas(actividades) {
+  const vistas = {}, subs = [];
+  actividades.forEach(a => a.subpartidas.forEach(s => {
+    if (vistas[s.codigo]) return;
+    vistas[s.codigo] = true;
+    subs.push({ codigo: s.codigo, descripcion: s.descripcion, actividad: a.titulo });
+  }));
+  return subs.sort((x, y) => x.codigo < y.codigo ? -1 : x.codigo > y.codigo ? 1 : 0);
+}
+
+/** Lo que ofrece el desplegable de Subpartida: con nombre y, al final, los códigos. Pura. */
+function opcionesDeSubpartidas(subs) {
+  const S = CAJA.SEPARADOR_OPCION;
+  const nombre = s => [s.descripcion, s.actividad ? `(${s.actividad})` : ''].filter(Boolean).join(' ');
+  return subs.map(s => nombre(s) ? s.codigo + S + nombre(s) : s.codigo)
+    .concat(subs.filter(s => nombre(s)).map(s => s.codigo));
 }
 
 function actualizarListaSubpartidasAhora() {
-  const c = actualizarListaSubpartidas();
+  const c = actualizarListaSubpartidas(SpreadsheetApp.getActiveSpreadsheet());
   SpreadsheetApp.getActiveSpreadsheet().toast(
     c.length ? `${c.length} subpartidas: ${c.join(', ')}` : 'No hay subpartidas definidas.', 'Subpartidas', 6);
 }

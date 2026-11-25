@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Ubuntu, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px; color: #222; background: #fff; }
+  [hidden] { display: none !important; }
+  #app { display: flex; height: 100vh; }
+
+  #lateral { width: 300px; border-right: 1px solid #dde1ee; display: flex; flex-direction: column; background: #f6f7fb; }
+  #saldos { padding: 12px 14px 10px; border-bottom: 1px solid #dde1ee; font-size: 12.5px; color: #445; line-height: 1.6; }
+  #saldos b { color: #222; font-weight: 500; }
+  #secciones { padding: 8px 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  #secciones .grupo { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #889; margin: 10px 6px 2px; }
+  #secciones button { text-align: left; border: 1px solid transparent; background: transparent; padding: 7px 10px;
+                      border-radius: 6px; display: flex; align-items: center; gap: 6px; }
+  #secciones button:hover { background: #e9ecf7; }
+  #secciones button.sel { background: #6075BB; color: #fff; }
+  #secciones button.destacada { background: #18A2B5; color: #fff; font-weight: 500; font-size: 13.5px; padding: 10px 12px; }
+  #secciones button.destacada:hover { background: #128a9b; }
+  #secciones button.destacada.sel { background: #0f7381; box-shadow: inset 0 0 0 2px #0b5863; }
+  #secciones .n { margin-left: auto; background: #D9A441; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 11.5px; }
+  #secciones .n.cero { background: #c4c9dc; }
+  #secciones button.sel .n { background: rgba(255,255,255,.3); }
+  #panelLista { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid #dde1ee; margin-top: 6px; }
+  #buscar { margin: 10px 12px 4px; padding: 8px 10px; font-size: 13px; border: 1px solid #b9c0db; border-radius: 6px; font-family: inherit; }
+  #buscar:focus { outline: 2px solid #6075BB; border-color: #6075BB; }
+  #contador { margin: 2px 12px 6px; color: #667; font-size: 12px; }
+  #lista { overflow-y: auto; flex: 1; }
+  .item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #e7e9f2; }
+  .item:hover { background: #e9ecf7; }
+  .item.activo { background: #6075BB; color: #fff; }
+  .item .linea1 { display: flex; gap: 6px; align-items: baseline; }
+  .item .importe { margin-left: auto; font-weight: 500; white-space: nowrap; }
+  .item .sub { font-size: 11.5px; color: #667; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item.activo .sub { color: #e3e7f7; }
+  .chip { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 11px; background: #eceef5; color: #445; }
+  .chip.tarjeta { background: #FCE8B2; color: #6b4a00; }
+  .chip.pend { background: #DCEBFA; color: #1d4f86; }
+  .item.activo .chip { background: rgba(255,255,255,.25); color: #fff; }
+
+  #principal { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #cabecera { padding: 12px 20px 9px; border-bottom: 3px solid #18A2B5; background: #6075BB; color: #fff; }
+  #cabecera h1 { margin: 0; font-size: 18px; font-weight: 500; }
+  #cabecera .datos { margin-top: 3px; font-size: 12.5px; opacity: .95; min-height: 16px; }
+  #contenido { flex: 1; overflow-y: auto; padding: 14px 20px 24px; }
+  #vacio { margin: 60px auto; color: #889; font-size: 15px; text-align: center; line-height: 1.6; max-width: 460px; }
+
+  fieldset { border: 1px solid #dde1ee; border-radius: 8px; margin: 0 0 14px; padding: 10px 14px 12px; }
+  legend { color: #6075BB; font-weight: 500; padding: 0 6px; font-size: 13.5px; }
+  .ayuda { color: #667; font-size: 12px; margin: -2px 0 8px; line-height: 1.45; }
+  .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 14px; }
+  .campo { display: flex; flex-direction: column; position: relative; }
+  .campo.ancho { grid-column: 1 / -1; }
+  .campo label { font-size: 11.5px; color: #556; margin-bottom: 3px; }
+  .campo input, .campo select, .campo textarea { font-family: inherit; font-size: 13px; padding: 6px 7px;
+          border: 1px solid #c4c9dc; border-radius: 5px; background: #fff; width: 100%; }
+  .campo input:focus, .campo select:focus { outline: 2px solid #6075BB; border-color: #6075BB; }
+  .campo.sucio input, .campo.sucio select { background: #FFF6E5; border-color: #D9A441; }
+  .campo.mal input { border-color: #b00020; background: #fdecee; }
+  .campo .nota { font-size: 11px; color: #889; margin-top: 2px; }
+  .campo .ro { padding: 6px 7px; background: #f2f3f7; border-radius: 5px; color: #444; min-height: 30px; word-break: break-word; }
+  .tipos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tipos label { border: 1px solid #c4c9dc; border-radius: 6px; padding: 7px 12px; cursor: pointer; background: #fff; }
+  .tipos label.sel { border-color: #6075BB; background: #eef0f8; color: #3d55a8; font-weight: 500; }
+  .tipos input { margin: 0 6px 0 0; vertical-align: middle; }
+
+  .sugerencias { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; background: #fff; border: 1px solid #b9c0db;
+                 border-radius: 0 0 6px 6px; max-height: 230px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+  .sugerencias div { padding: 6px 9px; cursor: pointer; }
+  .sugerencias div.marcada, .sugerencias div:hover { background: #e9ecf7; }
+  .sugerencias b { color: #3d55a8; font-weight: 500; }
+
+  .aviso { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; }
+  .error { background: #fdecee; border-left: 4px solid #b00020; padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; }
+  .info { background: #eaf6f8; border-left: 4px solid #18A2B5; padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; }
+  .ok { background: #e8f5ec; border-left: 4px solid #1d7a3a; padding: 8px 12px; margin: 0 0 12px; border-radius: 4px; }
+  #resultado ul, .aviso ul, .info ul { margin: 4px 0 0; padding-left: 18px; } #resultado li { margin: 2px 0; }
+
+  .banco { border: 2px solid #18A2B5; border-radius: 10px; padding: 12px 16px; margin: 0 0 14px; background: #f5fbfc; }
+  .banco h3 { margin: 0 0 8px; font-size: 14px; font-weight: 500; color: #0f7381; }
+  .banco table { border-collapse: collapse; width: 100%; }
+  .banco td { padding: 6px 4px; border-bottom: 1px solid #dceff2; vertical-align: middle; }
+  .banco td.et { color: #556; width: 120px; font-size: 12px; }
+  .banco td.val { font-family: 'Roboto Mono', Consolas, monospace; font-size: 14px; word-break: break-all; }
+  .banco td.bot { width: 92px; text-align: right; }
+  .banco ol { margin: 10px 0 0; padding-left: 20px; color: #445; line-height: 1.55; }
+
+  .zona { border: 2px dashed #b9c0db; border-radius: 10px; padding: 16px; text-align: center; color: #556; background: #f6f7fb; cursor: pointer; }
+  .zona.encima { border-color: #6075BB; background: #eef0f8; }
+  .zona b { color: #6075BB; }
+  .elegido { margin-top: 6px; font-size: 12.5px; }
+
+  table.tabla { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 6px; }
+  table.tabla th { text-align: left; background: #f2f3f7; padding: 6px 8px; font-weight: 500; color: #445; }
+  table.tabla td { padding: 5px 8px; border-bottom: 1px solid #eceef5; vertical-align: middle; }
+  table.tabla td input { width: 90px; padding: 4px 6px; border: 1px solid #c4c9dc; border-radius: 4px; font-family: inherit; }
+  .socios { max-height: 220px; overflow-y: auto; border: 1px solid #dde1ee; border-radius: 6px; margin-top: 6px; }
+  .socio { padding: 6px 10px; border-bottom: 1px solid #eceef5; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .socio:hover { background: #e9ecf7; }
+  .socio .sub { color: #667; font-size: 11.5px; }
+  .socio .der { margin-left: auto; white-space: nowrap; }
+  .verde { color: #1d7a3a; } .naranja { color: #a05a00; } .rojo { color: #b00020; }
+
+  #pie { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-top: 1px solid #dde1ee; background: #fafbfe; }
+  #estado { flex: 1; color: #667; }
+  #estado.hay { color: #8a5a00; font-weight: 500; }
+  button { font-family: inherit; font-size: 13px; padding: 7px 14px; border-radius: 6px; border: 1px solid #b9c0db;
+           background: #fff; cursor: pointer; color: #333; }
+  button:hover { background: #f0f2f9; }
+  button.primario { background: #6075BB; border-color: #6075BB; color: #fff; }
+  button.primario:hover { background: #4f63a6; }
+  button.peligro { color: #b00020; border-color: #e3a5ae; }
+  button.mini { padding: 3px 9px; font-size: 12px; }
+  button:disabled { opacity: .45; cursor: default; }
+  a { color: #3d55a8; }
+
+  #cargando { position: fixed; inset: 0; background: rgba(255,255,255,.75); display: flex; flex-direction: column;
+              align-items: center; justify-content: center; z-index: 20; color: #445; }
+  .rueda { width: 34px; height: 34px; border: 4px solid #dde1ee; border-top-color: #6075BB; border-radius: 50%;
+           animation: gira 0.9s linear infinite; margin-bottom: 12px; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body data-seccion="<?= seccion ?>" data-inicial="<?= inicial ?>">
+<div id="app">
+  <aside id="lateral">
+    <div id="saldos">Cargando saldos…</div>
+    <nav id="secciones">
+      <button data-s="traspaso" class="destacada">⇄ Traspaso banco ↔ efectivo</button>
+      <div class="grupo">Gastos del banco</div>
+      <button data-s="transferencia">＋ Nuevo gasto por transferencia</button>
+      <button data-s="pendientes">Transferencias pendientes <span class="n" id="n_pendientes"></span></button>
+      <button data-s="completar">Movimientos por completar <span class="n" id="n_completar"></span></button>
+      <button data-s="facturas">Facturas que faltan <span class="n" id="n_facturas"></span></button>
+      <div class="grupo">Efectivo</div>
+      <button data-s="efectivo">Ingreso o gasto en efectivo</button>
+    </nav>
+    <div id="panelLista" hidden>
+      <input id="buscar" placeholder="Buscar: importe, proveedor, concepto…" autocomplete="off">
+      <div id="contador"></div>
+      <div id="lista"></div>
+    </div>
+  </aside>
+  <main id="principal">
+    <div id="cabecera"><h1 id="titulo">Tesorería</h1><div class="datos" id="subtitulo"></div></div>
+    <div id="contenido"></div>
+    <div id="pie">
+      <span id="estado"></span>
+      <button id="recargar" title="Vuelve a leer la hoja">Recargar</button>
+      <button id="cerrar">Cerrar</button>
+      <button id="guardar" class="primario">Guardar</button>
+    </div>
+  </main>
+</div>
+<div id="cargando"><div class="rueda"></div><div id="textoCargando">Leyendo Caja…</div></div>
+
+<script>
+/* Sin comentarios de doble barra ni direcciones con doble barra en este
+   script: Apps Script los toma por comentarios al servir la plantilla
+   (BD Socios, CLAUDE.md §3.9). */
+(function () {
+  window.addEventListener('error', function (ev) {
+    var c = document.getElementById('contenido');
+    if (c) c.insertAdjacentHTML('afterbegin', '<div class="error">Error en la ventana: ' + String(ev.message) + '</div>');
+  });
+})();
+
+var D = null;
+var S = document.body.dataset.seccion || 'transferencia';
+var INICIAL = document.body.dataset.inicial || '';
+var sel = '';
+var archivo = null;
+var socios = null;
+var cuotas = [];
+var tipoEfectivo = 'cuotas';
+var hecho = null;
+var ocupado = false;
+
+var TITULOS = {
+  traspaso: ['Traspaso entre banco y efectivo', 'Ingresar en el banco el efectivo, o sacar dinero del cajero. Apúntalo ANTES de ingresarlo.'],
+  transferencia: ['Nuevo gasto por transferencia', 'Apúntalo aquí antes de ordenarlo en la app del banco.'],
+  pendientes: ['Transferencias pendientes', 'Apuntadas pero que todavía no han salido del banco.'],
+  completar: ['Movimientos del banco por completar', 'Gastos que han llegado con el extracto y no tienen partida: sobre todo, pagos con tarjeta.'],
+  facturas: ['Facturas que faltan', 'Gastos sin factura adjunta.'],
+  efectivo: ['Ingreso o gasto en efectivo', 'Lo que entra o sale de la caja de efectivo.']
+};
+var LISTAS = { pendientes: true, completar: true, facturas: true };
+
+function $(id) { return document.getElementById(id); }
+function esc(t) { return String(t === null || t === undefined ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function norm(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function euros(n) {
+  var v = Math.round((Number(n) || 0) * 100) / 100;
+  var s = Math.abs(v).toFixed(2).split('.');
+  return (v < 0 ? '-' : '') + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1] + ' €';
+}
+function importeTexto(n) { return Math.abs(Number(n) || 0).toFixed(2).replace('.', ','); }
+function numero(t) {
+  var s = String(t || '').replace(/[€\s]/g, '');
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  else s = s.replace(/,/g, '');
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function fechaCorta(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
+function compactar(t) { return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function formatoIban(t) { return compactar(t).replace(/(.{4})(?=.)/g, '$1 '); }
+function textoParaBanco(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[ºª]/g, '')
+    .replace(/[^A-Za-z0-9 \/\-?:().,'+]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function sinId(asunto, id) { var t = String(asunto || ''); return t.indexOf(id) === 0 ? t.slice(id.length).trim() : t; }
+function idPrevisto(iso) {
+  if (!iso) return 'AAAAMMDD-NN';
+  var pref = iso.replace(/-/g, '') + '-', max = 0;
+  D.ids.forEach(function (id) { if (id.indexOf(pref) === 0) { var n = parseInt(id.slice(pref.length), 10); if (n > max) max = n; } });
+  return pref + String(max + 1).padStart(2, '0');
+}
+function partidaTexto(codigo) {
+  if (!codigo) return '';
+  if (codigo === D.ejercicioAnterior) return codigo;
+  var p = D.partidas.ingresos.concat(D.partidas.gastos).find(function (x) { return x.codigo === codigo; });
+  return p && p.descripcion ? p.codigo + D.separador + p.descripcion : codigo;
+}
+
+function cargando(si, texto) { $('cargando').hidden = !si; if (texto) $('textoCargando').textContent = texto; }
+function estado(texto, hay) { $('estado').textContent = texto || ''; $('estado').className = hay ? 'hay' : ''; }
+function resultado(clase, titulo, lineas) {
+  var r = $('resultado');
+  if (!r) { $('contenido').insertAdjacentHTML('afterbegin', '<div id="resultado"></div>'); r = $('resultado'); }
+  var ls = (lineas || []).filter(Boolean);
+  r.hidden = false;
+  r.className = clase;
+  r.innerHTML = '<b>' + esc(titulo) + '</b>' + (ls.length ? '<ul>' + ls.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>' : '');
+  r.scrollIntoView({ block: 'nearest' });
+}
+function fallo(err) { ocupado = false; cargando(false); $('guardar').disabled = false; resultado('error', 'No se ha podido guardar', [err && err.message ? err.message : String(err)]); }
+
+function cargar(silencioso, despues) {
+  if (!silencioso) cargando(true, 'Leyendo Caja…');
+  google.script.run
+    .withSuccessHandler(function (d) { D = d; cargando(false); pintarLateral(); if (despues) despues(); })
+    .withFailureHandler(function (err) {
+      cargando(false);
+      $('contenido').innerHTML = '<div class="error">No se ha podido leer la hoja: ' + esc(err.message || err) + '</div>';
+    })
+    .datosDeAsientos();
+}
+
+/* ---------------------------------------------------------------
+   LATERAL: saldos, secciones y lista
+   --------------------------------------------------------------- */
+
+function enLista(s, a) {
+  if (s === 'pendientes') return a.pendiente;
+  if (s === 'completar') return a.completar;
+  if (s === 'facturas') return a.faltaFactura;
+  return false;
+}
+function listaDe(s) {
+  return D.asientos.filter(function (a) { return enLista(s, a); })
+    .sort(function (x, y) { return (y.fechaPago || y.fecha) < (x.fechaPago || x.fecha) ? -1 : 1; });
+}
+
+function pintarLateral() {
+  $('saldos').innerHTML = 'Ejercicio <b>' + esc(D.ejercicio) + '</b><br>Banco: <b>' + euros(D.saldos.banco)
+    + '</b> · Efectivo: <b>' + euros(D.saldos.efectivo) + '</b>';
+  ['pendientes', 'completar', 'facturas'].forEach(function (s) {
+    var n = listaDe(s).length;
+    $('n_' + s).textContent = n;
+    $('n_' + s).className = 'n' + (n ? '' : ' cero');
+  });
+  document.querySelectorAll('#secciones button').forEach(function (b) { b.classList.toggle('sel', b.dataset.s === S); });
+  $('panelLista').hidden = !LISTAS[S];
+  if (LISTAS[S]) pintarLista();
+}
+
+function pintarLista() {
+  var q = norm($('buscar').value).split(/\s+/).filter(Boolean);
+  var todos = listaDe(S);
+  var xs = todos.filter(function (a) {
+    var t = norm([a.id, a.fecha, fechaCorta(a.fecha), importeTexto(a.cantidad), a.concepto, a.descripcion, a.proveedor, a.partida, a.metodo].join(' '));
+    return q.every(function (p) { return t.indexOf(p) >= 0; });
+  });
+  $('contador').textContent = !todos.length ? '' : xs.length !== todos.length ? xs.length + ' de ' + todos.length
+    : todos.length + (todos.length === 1 ? ' asiento' : ' asientos');
+  if (!todos.length) { $('lista').innerHTML = '<div class="item" style="cursor:default;color:#889">No hay ninguno. ✓</div>'; return; }
+  $('lista').innerHTML = xs.map(function (a) {
+    var chips = [];
+    if (a.metodo === 'Tarjeta') chips.push('<span class="chip tarjeta">Tarjeta</span>');
+    else if (a.metodo && !a.pendiente) chips.push('<span class="chip">' + esc(a.metodo) + '</span>');
+    if (a.pendiente && S !== 'pendientes') chips.push('<span class="chip pend">Pendiente</span>');
+    if (S === 'facturas' && !a.partida) chips.push('<span class="chip">sin partida</span>');
+    var texto = a.descripcion || a.proveedor || a.concepto || '(sin descripción)';
+    return '<div class="item' + (a.id === sel ? ' activo' : '') + '" data-id="' + esc(a.id) + '">'
+      + '<div class="linea1"><span>' + fechaCorta(a.fechaPago || a.fecha) + '</span> ' + chips.join(' ')
+      + '<span class="importe">' + euros(a.cantidad) + '</span></div>'
+      + '<div class="sub">' + esc(a.id) + ' · ' + esc(texto) + '</div></div>';
+  }).join('');
+  $('lista').querySelectorAll('.item[data-id]').forEach(function (el) {
+    el.addEventListener('click', function () { elegir(el.dataset.id); });
+  });
+}
+
+function irA(s, id) {
+  if (hayCambios() && !confirm('Hay cambios sin guardar. ¿Salir sin guardarlos?')) return;
+  S = s; sel = id || ''; archivo = null; hecho = null;
+  $('buscar').value = '';
+  pintarLateral();
+  pintarPrincipal();
+}
+function elegir(id) {
+  if (id === sel) return;
+  if (hayCambios() && !confirm('Hay cambios sin guardar en ' + sel + '. ¿Salir sin guardarlos?')) return;
+  sel = id; archivo = null;
+  pintarLista();
+  pintarPrincipal();
+}
+
+/* ---------------------------------------------------------------
+   PIEZAS DE FORMULARIO
+   --------------------------------------------------------------- */
+
+function campo(id, etiqueta, control, opciones) {
+  opciones = opciones || {};
+  return '<div class="campo' + (opciones.ancho ? ' ancho' : '') + '" id="c_' + id + '"><label for="' + id + '">' + esc(etiqueta) + '</label>'
+    + control + (opciones.nota !== undefined ? '<div class="nota" id="nota_' + id + '">' + opciones.nota + '</div>' : '') + '</div>';
+}
+function entrada(id, valor, atributos) {
+  return '<input id="' + id + '" value="' + esc(valor) + '" autocomplete="off" ' + (atributos || '') + '>';
+}
+function soloLectura(etiqueta, valor, ancho) {
+  return '<div class="campo' + (ancho ? ' ancho' : '') + '"><label>' + esc(etiqueta) + '</label><div class="ro">' + (valor || '—') + '</div></div>';
+}
+function combo(id, placeholder) {
+  return '<div style="position:relative"><input id="' + id + '" autocomplete="off" placeholder="' + esc(placeholder) + '">'
+    + '<div class="sugerencias" id="' + id + '_sug" hidden></div></div>';
+}
+function val(id) { var e = $(id); return e ? String(e.value).trim() : ''; }
+
+/* Desplegable de partidas que busca por código y por nombre. El código
+   elegido queda en dataset.valor; en el campo se ve «G21 · Nombre». */
+function montarComboPartida(id, lado, inicial, alCambiar) {
+  var input = $(id), caja = $(id + '_sug'), marcada = -1, vistas = [];
+  var base = lado.charAt(0) === 'I' ? D.partidas.ingresos : D.partidas.gastos;
+  var opciones = base.map(function (p) { return { codigo: p.codigo, texto: partidaTexto(p.codigo) }; });
+  if (/\+EA$/.test(lado)) opciones.push({ codigo: D.ejercicioAnterior, texto: D.ejercicioAnterior + ' (ya estaba en el saldo inicial)' });
+  function poner(codigo) {
+    input.dataset.valor = codigo || '';
+    input.value = codigo ? partidaTexto(codigo) : '';
+    caja.hidden = true;
+    if (alCambiar) alCambiar(codigo || '');
+  }
+  function pintar() {
+    var q = norm(input.value).split(/\s+/).filter(Boolean);
+    vistas = opciones.filter(function (o) { var t = norm(o.texto); return q.every(function (p) { return t.indexOf(p) >= 0; }); });
+    if (!vistas.length) { caja.innerHTML = '<div style="color:#889;cursor:default">Ninguna partida con eso. Si falta, añádela en la hoja Presupuesto.</div>'; caja.hidden = false; return; }
+    marcada = Math.min(Math.max(marcada, 0), vistas.length - 1);
+    caja.innerHTML = vistas.map(function (o, i) {
+      var t = esc(o.texto), k = t.indexOf(esc(D.separador));
+      return '<div data-i="' + i + '"' + (i === marcada ? ' class="marcada"' : '') + '>'
+        + (k > 0 ? '<b>' + t.slice(0, k) + '</b>' + t.slice(k) : '<b>' + t + '</b>') + '</div>';
+    }).join('');
+    caja.hidden = false;
+    caja.querySelectorAll('div[data-i]').forEach(function (d) {
+      d.addEventListener('mousedown', function (ev) { ev.preventDefault(); poner(vistas[Number(d.dataset.i)].codigo); });
+    });
+  }
+  input.addEventListener('focus', function () { input.select(); marcada = 0; pintar(); });
+  input.addEventListener('input', function () { input.dataset.valor = ''; marcada = 0; pintar(); if (alCambiar) alCambiar(''); });
+  input.addEventListener('keydown', function (ev) {
+    if (caja.hidden) return;
+    if (ev.key === 'ArrowDown') { marcada = Math.min(marcada + 1, vistas.length - 1); pintar(); ev.preventDefault(); }
+    else if (ev.key === 'ArrowUp') { marcada = Math.max(marcada - 1, 0); pintar(); ev.preventDefault(); }
+    else if (ev.key === 'Enter' && vistas[marcada]) { poner(vistas[marcada].codigo); ev.preventDefault(); }
+    else if (ev.key === 'Escape') { caja.hidden = true; }
+  });
+  input.addEventListener('blur', function () {
+    caja.hidden = true;
+    if (input.dataset.valor) { input.value = partidaTexto(input.dataset.valor); return; }
+    var escrito = compactar(input.value);
+    var exacta = opciones.find(function (o) { return compactar(o.codigo) === escrito; });
+    if (exacta) poner(exacta.codigo);
+    else if (vistas.length === 1 && input.value) poner(vistas[0].codigo);
+  });
+  if (inicial) { input.dataset.valor = inicial; input.value = partidaTexto(inicial); } else input.dataset.valor = '';
+  return { poner: poner };
+}
+function partidaDe(id) { var e = $(id); return e ? (e.dataset.valor || '') : ''; }
+
+function rellenarSubpartidas(id, partida, actual) {
+  var s = $(id);
+  if (!s) return;
+  var subs = partida ? D.subpartidas.filter(function (x) { return x.codigo.indexOf(partida) === 0; }) : [];
+  s.innerHTML = '<option value="">' + (subs.length ? '(sin subpartida)' : '(esta partida no tiene subpartidas)') + '</option>'
+    + subs.map(function (x) {
+      return '<option value="' + esc(x.codigo) + '"' + (x.codigo === actual ? ' selected' : '') + '>'
+        + esc(x.codigo + (x.descripcion ? D.separador + x.descripcion : '')) + '</option>';
+    }).join('');
+  if (actual && !subs.some(function (x) { return x.codigo === actual; })) {
+    s.insertAdjacentHTML('beforeend', '<option value="' + esc(actual) + '" selected>' + esc(actual) + ' (no es de esta partida)</option>');
+  }
+  s.disabled = !subs.length && !actual;
+}
+
+function zonaFactura(a) {
+  var tiene = a && a.factura;
+  var enlace = tiene ? '<div class="elegido">Factura actual: <a href="' + esc(a.factura) + '" target="_blank">abrir</a>. Si subes otra, el asiento apuntará a la nueva.</div>' : '';
+  var sinCarpeta = D.config.facturas ? '' : '<div class="aviso">Falta CARPETA_FACTURAS en Config.js: no se pueden subir facturas.</div>';
+  return '<fieldset><legend>Factura</legend>' + sinCarpeta + enlace
+    + '<div class="zona" id="zona">Arrastra aquí la factura o <b>pulsa para elegirla</b> (PDF o foto)'
+    + '<input type="file" id="ficheroFactura" accept=".pdf,application/pdf,image/*" hidden></div>'
+    + '<div class="elegido" id="elegido"></div>'
+    + '<div class="ayuda" style="margin-top:6px">Se guarda en la carpeta de facturas del ejercicio con el ID del asiento como nombre.</div></fieldset>';
+}
+function montarZonaFactura() {
+  var zona = $('zona'), fichero = $('ficheroFactura');
+  if (!zona) return;
+  function elegir(f) {
+    archivo = f || null;
+    $('elegido').innerHTML = archivo ? '📎 <b>' + esc(archivo.name) + '</b> (' + Math.round(archivo.size / 1024) + ' KB) · se sube al guardar · '
+      + '<a href="#" id="quitarArchivo">quitar</a>' : '';
+    if (archivo) $('quitarArchivo').addEventListener('click', function (ev) { ev.preventDefault(); elegir(null); fichero.value = ''; });
+    marcarCambios();
+  }
+  zona.addEventListener('click', function () { fichero.click(); });
+  fichero.addEventListener('change', function () { elegir(fichero.files[0]); });
+  zona.addEventListener('dragover', function (ev) { ev.preventDefault(); zona.classList.add('encima'); });
+  zona.addEventListener('dragleave', function () { zona.classList.remove('encima'); });
+  zona.addEventListener('drop', function (ev) { ev.preventDefault(); zona.classList.remove('encima'); if (ev.dataTransfer.files.length) elegir(ev.dataTransfer.files[0]); });
+  if (archivo) elegir(archivo);
+}
+function leerArchivo(f) {
+  return new Promise(function (ok, mal) {
+    if (!f) { ok(null); return; }
+    var r = new FileReader();
+    r.onload = function () { ok({ nombre: f.name, tipo: f.type, base64: String(r.result).split(',')[1] }); };
+    r.onerror = function () { mal(new Error('No se ha podido leer el archivo ' + f.name)); };
+    r.readAsDataURL(f);
+  });
+}
+
+function camposProveedor(a, conCuenta) {
+  var h = campo('f_proveedor', conCuenta ? 'Proveedor (a quién se paga)' : 'Proveedor', entrada('f_proveedor', a.proveedor, 'list="dlProveedores" placeholder="Nombre o razón social"'),
+      { nota: D.proveedores.length ? 'Si ya se le ha pagado antes, al elegirlo se rellenan sus datos.' : '' })
+    + campo('f_cif', 'CIF / NIF', entrada('f_cif', a.cif, 'placeholder="B12345678"'), { nota: '' });
+  if (conCuenta) {
+    h += campo('f_iban', 'IBAN de destino', entrada('f_iban', a.cuentaAbono, 'placeholder="ES00 0000 0000 0000 0000 0000"'), { nota: '' })
+      + campo('f_titular', 'Titular de la cuenta', entrada('f_titular', a.titular, 'placeholder="Si no es el proveedor"'));
+  }
+  return h + '<datalist id="dlProveedores">' + D.proveedores.map(function (p) { return '<option value="' + esc(p.nombre) + '">'; }).join('') + '</datalist>';
+}
+function montarProveedor() {
+  var p = $('f_proveedor');
+  if (!p) return;
+  p.addEventListener('change', function () {
+    var x = D.proveedores.find(function (y) { return norm(y.nombre) === norm(p.value); });
+    if (!x) return;
+    if ($('f_cif') && !val('f_cif')) $('f_cif').value = x.cif;
+    if ($('f_iban') && !val('f_iban')) $('f_iban').value = x.cuentaAbono;
+    if ($('f_titular') && !val('f_titular')) $('f_titular').value = x.titular;
+    comprobarIban(); comprobarCif(); marcarCambios();
+  });
+  if ($('f_cif')) $('f_cif').addEventListener('input', comprobarCif);
+  if ($('f_iban')) $('f_iban').addEventListener('input', comprobarIban);
+  comprobarIban(); comprobarCif();
+}
+
+/* Las mismas comprobaciones que el servidor (ibanValido(),
+   documentoFiscalValido()), para avisar mientras se escribe. */
+function ibanValido(t) {
+  var c = compactar(t);
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(c)) return false;
+  if (c.slice(0, 2) === 'ES' && c.length !== 24) return false;
+  var r = c.slice(4) + c.slice(0, 4), resto = 0;
+  for (var i = 0; i < r.length; i++) {
+    var v = /\d/.test(r[i]) ? r[i] : String(r.charCodeAt(i) - 55);
+    for (var j = 0; j < v.length; j++) resto = (resto * 10 + Number(v[j])) % 97;
+  }
+  return resto === 1;
+}
+function documentoValido(t) {
+  var c = compactar(t), L = 'TRWAGMYFPDXBNJZSQVHLCKE', m;
+  if (!c) return null;
+  if ((m = c.match(/^(\d{8})([A-Z])$/))) return L.charAt(parseInt(m[1], 10) % 23) === m[2];
+  if ((m = c.match(/^([XYZ])(\d{7})([A-Z])$/))) return L.charAt(parseInt('XYZ'.indexOf(m[1]) + m[2], 10) % 23) === m[3];
+  if (!(m = c.match(/^([ABCDEFGHJNPQRSUVW])(\d{7})([0-9A-J])$/))) return null;
+  var suma = 0;
+  m[2].split('').forEach(function (x, i) { x = Number(x); if (i % 2) suma += x; else { var y = 2 * x; suma += Math.floor(y / 10) + y % 10; } });
+  var dig = (10 - suma % 10) % 10, letra = 'JABCDEFGHI'.charAt(dig);
+  if ('NPQRSW'.indexOf(m[1]) >= 0) return m[3] === letra;
+  if ('ABEH'.indexOf(m[1]) >= 0) return m[3] === String(dig);
+  return m[3] === String(dig) || m[3] === letra;
+}
+function comprobarIban() {
+  if (!$('f_iban')) return;
+  var t = val('f_iban'), ok = !t || ibanValido(t);
+  $('c_f_iban').classList.toggle('mal', !ok);
+  $('nota_f_iban').innerHTML = !t ? '' : ok ? '<span class="verde">✓ IBAN correcto</span>' : '<span class="rojo">IBAN incompleto o con alguna errata</span>';
+}
+function comprobarCif() {
+  if (!$('f_cif')) return;
+  var r = documentoValido(val('f_cif'));
+  $('nota_f_cif').innerHTML = r === true ? '<span class="verde">✓</span>' : r === false ? '<span class="naranja">La letra o el dígito de control no cuadran</span>' : '';
+}
+
+/* ---------------------------------------------------------------
+   PRINCIPAL
+   --------------------------------------------------------------- */
+
+function pintarPrincipal() {
+  $('titulo').textContent = TITULOS[S][0];
+  $('subtitulo').textContent = TITULOS[S][1];
+  estado('');
+  $('guardar').hidden = false; $('guardar').disabled = false;
+  var c = $('contenido');
+  if (S === 'traspaso') return pintarTraspaso(c);
+  if (S === 'transferencia') return hecho ? pintarHecho(c, hecho) : pintarNuevaTransferencia(c);
+  if (S === 'efectivo') return pintarEfectivo(c);
+  var xs = listaDe(S);
+  if (!sel || !D.asientos.some(function (a) { return a.id === sel; })) {
+    $('guardar').hidden = true;
+    c.innerHTML = '<div id="vacio">' + (xs.length ? 'Elige un asiento de la lista de la izquierda.'
+      : ({ pendientes: 'No hay transferencias pendientes.', completar: 'Todos los gastos del banco tienen partida. ✓',
+           facturas: 'No falta ninguna factura. ✓' })[S]) + '</div>';
+    return;
+  }
+  pintarAsiento(c, D.asientos.find(function (a) { return a.id === sel; }));
+}
+
+/* ---- Traspaso ---- */
+function pintarTraspaso(c) {
+  var sueltos = D.traspasosSueltos;
+  c.innerHTML = '<div class="info">Ahora hay <b>' + euros(D.saldos.efectivo) + '</b> en efectivo y <b>' + euros(D.saldos.banco) + '</b> en el banco.</div>'
+    + '<div class="tipos" id="tiposTraspaso">'
+    + '<label class="sel"><input type="radio" name="tt" value="ingreso" checked>Ingreso de efectivo en el banco</label>'
+    + '<label><input type="radio" name="tt" value="retirada">Retirada de efectivo del banco (cajero)</label></div>'
+    + '<fieldset><legend>Traspaso</legend><div class="rejilla">'
+    + campo('t_fecha', 'Fecha', entrada('t_fecha', D.hoy, 'type="date"'))
+    + campo('t_importe', 'Importe (€)', entrada('t_importe', '', 'inputmode="decimal" placeholder="70,00"'))
+    + campo('t_descripcion', 'Descripción (opcional)', entrada('t_descripcion', '', 'placeholder="Cuotas cobradas en la reunión de padres"'), { ancho: true })
+    + '</div></fieldset>'
+    + '<div class="ayuda">Se crean dos filas con la partida Traspaso: una en el banco y otra en efectivo, con importes contrarios. '
+    + 'No es ingreso ni gasto: solo cambia el dinero de sitio.<br><b>Si vas a ingresar en el banco efectivo de cuotas</b>, apúntalo aquí antes: '
+    + 'en el extracto, un ingreso en cajero de tesorería y el de una familia que paga en el cajero son idénticos, y sin esto se tomaría por una cuota. '
+    + 'Las cuotas que forman ese efectivo tienen que estar ya apuntadas en Efectivo, cada una con su ID de socio.</div>'
+    + (sueltos.length ? '<div class="aviso" style="margin-top:12px"><b>Traspasos sin su otra pata</b> (banco ↔ efectivo, mismo importe con signo contrario):<ul>'
+      + sueltos.map(function (a) { return '<li>' + esc(a.id) + ' · ' + fechaCorta(a.fechaPago || a.fecha) + ' · ' + (a.efectivo ? 'efectivo' : 'banco') + ' · ' + euros(a.cantidad) + '</li>'; }).join('')
+      + '</ul></div>' : '');
+  $('guardar').textContent = 'Apuntar el traspaso';
+  document.querySelectorAll('#tiposTraspaso input').forEach(function (r) {
+    r.addEventListener('change', function () {
+      document.querySelectorAll('#tiposTraspaso label').forEach(function (l) { l.classList.toggle('sel', l.querySelector('input').checked); });
+    });
+  });
+}
+function guardarTraspaso() {
+  var datos = { tipo: document.querySelector('input[name=tt]:checked').value, fecha: val('t_fecha'),
+                importe: val('t_importe'), descripcion: val('t_descripcion') };
+  enviar('Apuntando el traspaso…', 'apuntarTraspaso', datos, function (texto) {
+    pintarTraspaso($('contenido'));
+    resultado('ok', 'Traspaso apuntado', [texto]);
+    cargar(true, function () { pintarTraspaso($('contenido')); resultado('ok', 'Traspaso apuntado', [texto]); });
+  });
+}
+
+/* ---- Nueva transferencia ---- */
+function pintarNuevaTransferencia(c) {
+  c.innerHTML = '<fieldset><legend>Pago</legend><div class="rejilla">'
+    + campo('f_fecha', 'Fecha (de la factura o del gasto)', entrada('f_fecha', D.hoy, 'type="date"'))
+    + campo('f_importe', 'Importe a pagar (€)', entrada('f_importe', '', 'inputmode="decimal" placeholder="125,40"'))
+    + '</div></fieldset>'
+    + '<fieldset><legend>Proveedor y cuenta de destino</legend><div class="rejilla">' + camposProveedor({}, true) + '</div></fieldset>'
+    + '<fieldset><legend>Imputación</legend><div class="rejilla">'
+    + campo('f_partida', 'Partida', combo('f_partida', 'Código o nombre: G21, convivencia…'))
+    + campo('f_subpartida', 'Subpartida', '<select id="f_subpartida"></select>')
+    + campo('f_descripcion', 'Descripción', entrada('f_descripcion', '', 'placeholder="Material para la convivencia de otoño"'), { ancho: true, nota: 'Es lo que sale en los informes.' })
+    + '</div></fieldset>'
+    + '<fieldset><legend>Asunto de la transferencia</legend>'
+    + '<div class="ayuda">Lo que se escribe en el concepto de la transferencia. Empieza siempre por el ID del asiento: así, al importar el extracto, '
+    + 'se reconoce y queda como pagada.</div><div class="rejilla">'
+    + campo('f_asunto', 'Texto (después del ID)', entrada('f_asunto', '', 'placeholder="Si lo dejas vacío, la descripción"'), { ancho: true, nota: '' })
+    + '</div></fieldset>'
+    + zonaFactura(null);
+  $('guardar').textContent = 'Apuntar el gasto';
+  montarComboPartida('f_partida', 'G', '', function (p) { rellenarSubpartidas('f_subpartida', p, ''); });
+  rellenarSubpartidas('f_subpartida', '', '');
+  montarProveedor();
+  montarZonaFactura();
+  ['f_fecha', 'f_asunto', 'f_descripcion'].forEach(function (id) { $(id).addEventListener('input', vistaAsunto); });
+  vistaAsunto();
+}
+function vistaAsunto() {
+  var id = idPrevisto(val('f_fecha'));
+  var a = (id + ' ' + (textoParaBanco(val('f_asunto')) || textoParaBanco(val('f_descripcion')))).trim();
+  var largo = a.length > D.asuntoMax;
+  $('nota_f_asunto').innerHTML = 'Quedará: <b>' + esc(a.slice(0, D.asuntoMax)) + '</b> (' + Math.min(a.length, D.asuntoMax) + '/' + D.asuntoMax + ')'
+    + (largo ? ' <span class="naranja">— se corta</span>' : '') + '<br>El número final se confirma al guardar. Sin tildes ni ñ: algunos bancos no las admiten.';
+}
+function guardarNuevaTransferencia() {
+  var datos = { fecha: val('f_fecha'), importe: val('f_importe'), proveedor: val('f_proveedor'), cif: val('f_cif'),
+    cuentaAbono: val('f_iban'), titular: val('f_titular'), partida: partidaDe('f_partida'), subpartida: val('f_subpartida'),
+    descripcion: val('f_descripcion'), asunto: val('f_asunto') };
+  if (!datos.partida && val('f_partida')) { resultado('error', 'Elige la partida de la lista', ['«' + val('f_partida') + '» no es ninguna partida.']); return; }
+  if (datos.cuentaAbono && !ibanValido(datos.cuentaAbono)) { resultado('error', 'Revisa el IBAN', ['El IBAN no es válido: falta algún dígito o hay una errata.']); return; }
+  enviar('Apuntando el gasto…', 'guardarTransferencia', datos, function (r) {
+    hecho = r;
+    archivo = null;
+    D.asientos.push(r.asiento);
+    D.ids.push(r.asiento.id);
+    pintarLateral();
+    pintarHecho($('contenido'), r);
+    cargar(true, pintarLateral);
+  }, true);
+}
+function pintarHecho(c, r) {
+  var a = r.asiento;
+  $('guardar').hidden = true;
+  c.innerHTML = '<div id="resultado" class="ok"><b>Gasto apuntado: ' + esc(a.id) + '</b>'
+    + (r.lineas.length ? '<ul>' + r.lineas.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>' : '') + '</div>'
+    + tarjetaBanco(a)
+    + '<div style="display:flex;gap:8px;margin-top:6px"><button id="otra" class="primario">Apuntar otro gasto por transferencia</button>'
+    + '<button id="verPendientes">Ver las transferencias pendientes</button></div>';
+  montarTarjetaBanco(a);
+  $('otra').addEventListener('click', function () { hecho = null; pintarPrincipal(); });
+  $('verPendientes').addEventListener('click', function () { hecho = null; irA('pendientes', a.id); });
+}
+function tarjetaBanco(a) {
+  var fila = function (et, mostrar, copiar) {
+    return '<tr><td class="et">' + et + '</td><td class="val">' + esc(mostrar) + '</td><td class="bot">'
+      + '<button class="mini" data-copiar="' + esc(copiar) + '">Copiar</button></td></tr>';
+  };
+  return '<div class="banco"><h3>Para ordenarla en la app del banco</h3><table>'
+    + fila('Beneficiario', a.titular || a.proveedor, a.titular || a.proveedor)
+    + fila('IBAN', formatoIban(a.cuentaAbono), compactar(a.cuentaAbono))
+    + fila('Importe', euros(a.cantidad).replace('-', ''), importeTexto(a.cantidad))
+    + fila('Concepto', a.asunto, a.asunto)
+    + '</table><ol><li>En la app: nueva transferencia con estos datos. El concepto tiene que empezar por <b>' + esc(a.id) + '</b>.</li>'
+    + '<li>Cuando salga en el banco, importa el extracto como siempre: este asiento tomará la fecha del banco y dejará de estar pendiente.</li>'
+    + '<li>Hasta entonces cuenta en el presupuesto, pero no en el saldo.</li></ol></div>';
+}
+function montarTarjetaBanco() {
+  document.querySelectorAll('[data-copiar]').forEach(function (b) {
+    b.addEventListener('click', function () { copiar(b.dataset.copiar, b); });
+  });
+}
+function copiar(texto, boton) {
+  var listo = function () { var t = boton.textContent; boton.textContent = 'Copiado ✓'; setTimeout(function () { boton.textContent = t; }, 1500); };
+  var aMano = function () {
+    var t = document.createElement('textarea'); t.value = texto; document.body.appendChild(t); t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(t); listo();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(listo, aMano);
+  else aMano();
+}
+
+/* ---- Un asiento que ya existe ---- */
+function pintarAsiento(c, a) {
+  var banco = '';
+  if (a.delBanco || !a.pendiente) {
+    banco = '<fieldset><legend>Movimiento</legend><div class="rejilla">'
+      + soloLectura('Fecha de pago', fechaCorta(a.fechaPago || a.fecha))
+      + soloLectura('Importe', '<b>' + euros(a.cantidad) + '</b>')
+      + soloLectura('Método de pago', esc(a.metodo) + (a.efectivo ? ' (caja de efectivo)' : ''))
+      + soloLectura('ID del asiento', esc(a.id))
+      + (a.concepto ? soloLectura('Concepto del banco', esc(a.concepto), true) : '')
+      + '</div></fieldset>';
+  }
+  var pend = '';
+  if (a.pendiente) {
+    pend = tarjetaBanco(a)
+      + '<fieldset><legend>Pago</legend><div class="rejilla">'
+      + campo('f_fecha', 'Fecha (de la factura o del gasto)', entrada('f_fecha', a.fecha, 'type="date"'))
+      + campo('f_importe', 'Importe a pagar (€)', entrada('f_importe', importeTexto(a.cantidad), 'inputmode="decimal"'))
+      + campo('f_asunto', 'Asunto (después de ' + esc(a.id) + ')', entrada('f_asunto', sinId(a.asunto, a.id)), { ancho: true })
+      + '</div></fieldset>';
+  }
+  var factura = a.metodo === 'Cargo bancario' ? '' : zonaFactura(a);
+  var arriba = S === 'facturas' ? factura : (a.faltaFactura ? '<div class="aviso">Este gasto no tiene factura: puedes subirla abajo.</div>' : '');
+  c.innerHTML = '<div id="resultado" hidden></div>' + arriba + pend + banco
+    + '<fieldset><legend>Imputación</legend><div class="rejilla">'
+    + campo('f_partida', 'Partida', combo('f_partida', 'Código o nombre'))
+    + campo('f_subpartida', 'Subpartida', '<select id="f_subpartida"></select>')
+    + campo('f_descripcion', 'Descripción', entrada('f_descripcion', a.descripcion, 'placeholder="Qué es: material para…"'), { ancho: true, nota: 'Es lo que sale en los informes (nunca el concepto del banco).' })
+    + '</div></fieldset>'
+    + '<fieldset><legend>Proveedor</legend><div class="rejilla">' + camposProveedor(a, a.pendiente) + '</div></fieldset>'
+    + (S === 'facturas' ? '' : factura)
+    + (a.pendiente ? '<div style="margin-top:4px"><button id="anular" class="peligro">Anular esta transferencia (no se va a hacer)</button></div>' : '');
+  $('guardar').textContent = 'Guardar';
+  var lado = a.cantidad < 0 ? 'G+EA' : 'I+EA';
+  montarComboPartida('f_partida', lado, a.partida, function (p) { rellenarSubpartidas('f_subpartida', p, val('f_subpartida')); marcarCambios(); });
+  rellenarSubpartidas('f_subpartida', a.partida, a.subpartida);
+  montarProveedor();
+  montarZonaFactura();
+  montarTarjetaBanco();
+  c.querySelectorAll('input, select').forEach(function (e) { e.addEventListener('input', marcarCambios); e.addEventListener('change', marcarCambios); });
+  if ($('anular')) $('anular').addEventListener('click', function () { anular(a); });
+  marcarCambios();
+}
+
+function cambiosDe(a) {
+  if (!a || !$('f_descripcion')) return {};
+  var actual = {
+    partida: partidaDe('f_partida') || (val('f_partida') ? val('f_partida') : ''),
+    subpartida: val('f_subpartida'), descripcion: val('f_descripcion'), proveedor: val('f_proveedor'), cif: val('f_cif')
+  };
+  if (a.pendiente) {
+    actual.fecha = val('f_fecha'); actual.importe = val('f_importe');
+    actual.cuentaAbono = val('f_iban'); actual.titular = val('f_titular'); actual.asunto = val('f_asunto');
+  }
+  var cambios = {};
+  Object.keys(actual).forEach(function (k) {
+    var antes = a[k === 'importe' ? 'cantidad' : k];
+    var mismo;
+    if (k === 'importe') mismo = Math.abs(numero(actual[k])).toFixed(2) === Math.abs(antes || 0).toFixed(2);
+    else if (k === 'asunto') mismo = textoParaBanco(actual[k]) === sinId(antes, a.id);
+    else if (k === 'cuentaAbono' || k === 'cif') mismo = compactar(actual[k]) === compactar(antes);
+    else mismo = String(actual[k]).trim() === String(antes || '').trim();
+    if (!mismo) cambios[k] = { antes: antes === null || antes === undefined ? '' : antes, despues: actual[k] };
+  });
+  return cambios;
+}
+function asientoSel() { return D && sel ? D.asientos.find(function (a) { return a.id === sel; }) : null; }
+function hayCambios() {
+  if (LISTAS[S] && asientoSel()) return Object.keys(cambiosDe(asientoSel())).length > 0 || !!archivo;
+  if (S === 'efectivo') return cuotas.length > 0 || !!val('e_importe');
+  if (S === 'transferencia' && !hecho) return !!(val('f_importe') || val('f_proveedor') || archivo);
+  return false;
+}
+function marcarCambios() {
+  if (!LISTAS[S] || !asientoSel()) return;
+  var n = Object.keys(cambiosDe(asientoSel())).length + (archivo ? 1 : 0);
+  estado(n ? 'Hay cambios sin guardar.' : '', !!n);
+  ['partida', 'subpartida', 'descripcion', 'proveedor', 'cif', 'fecha', 'importe', 'asunto', 'iban', 'titular'].forEach(function (k) {
+    var e = $('c_f_' + k); if (!e) return;
+    var clave = k === 'iban' ? 'cuentaAbono' : k;
+    e.classList.toggle('sucio', clave in cambiosDe(asientoSel()));
+  });
+}
+function guardarAsiento() {
+  var a = asientoSel();
+  if (!a) return;
+  if (val('f_partida') && !partidaDe('f_partida')) { resultado('error', 'Elige la partida de la lista', ['«' + val('f_partida') + '» no es ninguna partida.']); return; }
+  var cambios = cambiosDe(a);
+  if (!Object.keys(cambios).length && !archivo) { resultado('info', 'No hay nada que guardar.'); return; }
+  enviar('Guardando ' + a.id + '…', 'guardarCambiosDeAsiento', { id: a.id, cambios: cambios }, function (r) {
+    var lista = listaDe(S), i = lista.findIndex(function (x) { return x.id === a.id; });
+    var k = D.asientos.findIndex(function (x) { return x.id === a.id; });
+    D.asientos[k] = r.asiento;
+    archivo = null;
+    var sigue = enLista(S, r.asiento);
+    if (!sigue) {
+      var resto = listaDe(S);
+      sel = resto.length ? resto[Math.min(i, resto.length - 1)].id : '';
+    }
+    pintarLateral();
+    pintarPrincipal();
+    resultado(r.lineas.some(function (l) { return l.charAt(0) === '⚠'; }) ? 'aviso' : 'ok',
+      sigue ? a.id + ': guardado' : a.id + ' ya está completo' + (sel ? '. Este es el siguiente:' : '.'), r.lineas);
+    cargar(true, function () { pintarLateral(); });
+  }, true);
+}
+function anular(a) {
+  if (!confirm('¿Borrar el asiento ' + a.id + ' (' + euros(a.cantidad) + ' a ' + (a.proveedor || '¿?') + ')? '
+    + 'Hazlo solo si la transferencia NO se ha hecho ni se va a hacer.')) return;
+  enviar('Borrando ' + a.id + '…', 'anularTransferenciaPendiente', a.id, function (r) {
+    D.asientos = D.asientos.filter(function (x) { return x.id !== a.id; });
+    sel = '';
+    pintarLateral(); pintarPrincipal();
+    resultado('ok', 'Transferencia anulada', r.lineas);
+    cargar(true, function () { pintarLateral(); });
+  });
+}
+
+/* ---- Efectivo ---- */
+function pintarEfectivo(c) {
+  var tipos = [['cuotas', 'Cuotas cobradas en mano'], ['ingreso', 'Otro ingreso'], ['gasto', 'Gasto en efectivo']];
+  var h = '<div class="info">En la caja de efectivo hay ahora <b>' + euros(D.saldos.efectivo) + '</b>.</div>'
+    + '<div class="tipos" id="tiposEfectivo">' + tipos.map(function (t) {
+      return '<label' + (t[0] === tipoEfectivo ? ' class="sel"' : '') + '><input type="radio" name="te" value="' + t[0] + '"'
+        + (t[0] === tipoEfectivo ? ' checked' : '') + '>' + t[1] + '</label>';
+    }).join('') + '</div>'
+    + '<fieldset><legend>Cuándo</legend><div class="rejilla">' + campo('e_fecha', 'Fecha en que se cobró o pagó', entrada('e_fecha', val('e_fecha') || D.hoy, 'type="date"')) + '</div></fieldset>';
+  if (tipoEfectivo === 'cuotas') {
+    h += '<fieldset><legend>Socios</legend>'
+      + '<div class="ayuda">Una fila por socio, con su ID: así la cuota se apunta como pagada en BD Socios (se sincroniza al guardar). '
+      + 'Cuando lleves este dinero al banco, apúntalo como <a href="#" id="irTraspaso">traspaso</a>.</div>'
+      + '<input id="buscarSocio" placeholder="Busca por nombre, apellidos o número de socio…" autocomplete="off" style="width:100%;padding:7px 9px;border:1px solid #b9c0db;border-radius:6px;font-family:inherit">'
+      + '<div id="resultadosSocio" class="socios" hidden></div>'
+      + '<div id="tablaCuotas"></div></fieldset>';
+  } else {
+    var gasto = tipoEfectivo === 'gasto';
+    h += '<fieldset><legend>' + (gasto ? 'Gasto' : 'Ingreso') + '</legend><div class="rejilla">'
+      + campo('e_importe', 'Importe (€)', entrada('e_importe', '', 'inputmode="decimal" placeholder="12,50"'))
+      + campo('f_partida', 'Partida', combo('f_partida', 'Código o nombre'))
+      + campo('f_subpartida', 'Subpartida', '<select id="f_subpartida"></select>')
+      + campo('f_descripcion', 'Descripción', entrada('f_descripcion', '', gasto ? 'placeholder="Qué se ha comprado"' : 'placeholder="De qué es el ingreso"'), { ancho: true })
+      + '</div></fieldset>'
+      + (gasto ? '<fieldset><legend>Proveedor</legend><div class="rejilla">' + camposProveedor({}, false) + '</div></fieldset>' + zonaFactura(null) : '')
+      + (gasto ? '' : '<div class="ayuda">¿Es la cuota de un socio? Usa «Cuotas cobradas en mano»: así se apunta también en BD Socios.</div>');
+  }
+  c.innerHTML = h;
+  $('guardar').textContent = tipoEfectivo === 'cuotas' ? 'Apuntar las cuotas' : 'Apuntar';
+  document.querySelectorAll('#tiposEfectivo input').forEach(function (r) {
+    r.addEventListener('change', function () {
+      if (cuotas.length && !confirm('Se perderá la lista de socios. ¿Seguir?')) { pintarEfectivo(c); return; }
+      cuotas = []; archivo = null; tipoEfectivo = r.value; pintarEfectivo(c);
+    });
+  });
+  if (tipoEfectivo === 'cuotas') {
+    $('irTraspaso').addEventListener('click', function (ev) { ev.preventDefault(); irA('traspaso'); });
+    $('buscarSocio').addEventListener('focus', cargarSocios);
+    $('buscarSocio').addEventListener('input', pintarSocios);
+    pintarCuotas();
+  } else {
+    montarComboPartida('f_partida', tipoEfectivo === 'gasto' ? 'G' : 'I', '', function (p) { rellenarSubpartidas('f_subpartida', p, ''); });
+    rellenarSubpartidas('f_subpartida', '', '');
+    montarProveedor();
+    montarZonaFactura();
+  }
+}
+function cargarSocios() {
+  if (socios) return;
+  $('resultadosSocio').hidden = false;
+  if (!D.config.bdSocios) {
+    $('resultadosSocio').innerHTML = '<div class="socio">Falta ID_BD_SOCIOS en Config.js: no se puede buscar por nombre. '
+      + 'Escribe el ID de socio (JMV-000000) y pulsa «Apuntar las cuotas».</div>';
+    return;
+  }
+  $('resultadosSocio').innerHTML = '<div class="socio">Leyendo BD Socios…</div>';
+  google.script.run
+    .withSuccessHandler(function (xs) { socios = xs; pintarSocios(); })
+    .withFailureHandler(function (err) { $('resultadosSocio').innerHTML = '<div class="socio rojo">No se ha podido leer BD Socios: ' + esc(err.message || err) + '</div>'; })
+    .sociosParaEfectivo();
+}
+function pintarSocios() {
+  var caja = $('resultadosSocio');
+  if (!socios) return;
+  var q = norm($('buscarSocio').value).split(/\s+/).filter(Boolean);
+  if (!q.length) { caja.hidden = true; return; }
+  var xs = socios.filter(function (s) {
+    var t = norm(s.nombre + ' ' + s.id + ' ' + s.id.replace(/\D/g, '').replace(/^0+/, ''));
+    return q.every(function (p) { return t.indexOf(p) >= 0; });
+  }).slice(0, 30);
+  caja.hidden = false;
+  if (!xs.length) { caja.innerHTML = '<div class="socio">Nadie con ese nombre inscrito en el curso ' + esc(D.curso) + '.</div>'; return; }
+  caja.innerHTML = xs.map(function (s, i) {
+    var enCaja = D.sociosEnCaja[s.id];
+    var estadoCuota = s.pagada === 'Sí' ? '<span class="verde">pagada</span>' : s.pagada === 'Exenta' ? '<span class="verde">exenta</span>'
+      : s.pagada === 'Parcial' ? '<span class="naranja">pago parcial</span>' : '<span>sin pagar</span>';
+    return '<div class="socio" data-i="' + i + '"><div><b>' + esc(s.nombre) + '</b><div class="sub">' + esc(s.id) + ' · tramo ' + esc(s.tramo || '¿?')
+      + (enCaja ? ' · <span class="naranja">ya en Caja: ' + esc(enCaja.join(', ')) + '</span>' : '') + '</div></div>'
+      + '<div class="der">' + (s.cuota ? euros(s.cuota) : '¿cuota?') + ' · ' + estadoCuota + '</div></div>';
+  }).join('');
+  caja.querySelectorAll('.socio[data-i]').forEach(function (el) {
+    el.addEventListener('click', function () { añadirCuota(xs[Number(el.dataset.i)]); });
+  });
+}
+function añadirCuota(s) {
+  if (cuotas.some(function (c) { return c.idSocio === s.id; })) { estado(s.nombre + ' ya está en la lista.', true); return; }
+  cuotas.push({ idSocio: s.id, nombre: s.nombre, importe: s.cuota ? importeTexto(s.cuota) : '', partida: s.partida,
+    aviso: s.pagada === 'Sí' ? 'Su cuota ya figura como pagada en BD Socios.' : (D.sociosEnCaja[s.id] ? 'Ya tiene un asiento en Caja: ' + D.sociosEnCaja[s.id].join(', ') : '') });
+  $('buscarSocio').value = ''; $('resultadosSocio').hidden = true; $('buscarSocio').focus();
+  pintarCuotas();
+}
+function pintarCuotas() {
+  var t = $('tablaCuotas');
+  if (!cuotas.length) { t.innerHTML = '<div class="ayuda" style="margin-top:10px">Todavía no has añadido a nadie.</div>'; estado(''); return; }
+  var total = cuotas.reduce(function (s, c) { return s + numero(c.importe); }, 0);
+  t.innerHTML = '<table class="tabla"><tr><th>Socio</th><th>Partida</th><th>Importe (€)</th><th></th></tr>'
+    + cuotas.map(function (c, i) {
+      return '<tr><td><b>' + esc(c.nombre) + '</b> <span class="sub" style="color:#667">' + esc(c.idSocio) + '</span>'
+        + (c.aviso ? '<div class="naranja" style="font-size:11.5px">⚠ ' + esc(c.aviso) + '</div>' : '') + '</td>'
+        + '<td>' + esc(c.partida || '(al sincronizar)') + '</td>'
+        + '<td><input data-i="' + i + '" value="' + esc(c.importe) + '" inputmode="decimal"></td>'
+        + '<td><button class="mini" data-quitar="' + i + '">Quitar</button></td></tr>';
+    }).join('')
+    + '<tr><td colspan="2" style="text-align:right"><b>Total</b></td><td><b>' + euros(total) + '</b></td><td></td></tr></table>';
+  t.querySelectorAll('input[data-i]').forEach(function (e) {
+    e.addEventListener('change', function () { cuotas[Number(e.dataset.i)].importe = e.value; pintarCuotas(); });
+  });
+  t.querySelectorAll('[data-quitar]').forEach(function (b) {
+    b.addEventListener('click', function () { cuotas.splice(Number(b.dataset.quitar), 1); pintarCuotas(); });
+  });
+  estado(cuotas.length + (cuotas.length === 1 ? ' cuota' : ' cuotas') + ' sin guardar.', true);
+}
+function guardarEfectivoAhora() {
+  var datos = { tipo: tipoEfectivo, fecha: val('e_fecha') };
+  if (tipoEfectivo === 'cuotas') {
+    var escrito = val('buscarSocio');
+    if (!cuotas.length && /^jmv-?\d+$/i.test(escrito)) {
+      var n = escrito.replace(/\D/g, '');
+      cuotas.push({ idSocio: 'JMV-' + ('000000' + n).slice(-6), nombre: '', importe: '', partida: '' });
+      pintarCuotas();
+      resultado('info', 'Pon el importe de la cuota y vuelve a pulsar «Apuntar las cuotas».'); return;
+    }
+    datos.cuotas = cuotas.map(function (c) { return { idSocio: c.idSocio, importe: c.importe, partida: c.partida }; });
+  } else {
+    if (val('f_partida') && !partidaDe('f_partida')) { resultado('error', 'Elige la partida de la lista', ['«' + val('f_partida') + '» no es ninguna partida.']); return; }
+    datos.importe = val('e_importe'); datos.partida = partidaDe('f_partida'); datos.subpartida = val('f_subpartida');
+    datos.descripcion = val('f_descripcion'); datos.proveedor = val('f_proveedor'); datos.cif = val('f_cif');
+  }
+  enviar(tipoEfectivo === 'cuotas' && D.config.bdSocios ? 'Apuntando y sincronizando con BD Socios…' : 'Apuntando…', 'guardarEfectivo', datos, function (r) {
+    cuotas = []; archivo = null; socios = null;
+    pintarEfectivo($('contenido'));
+    resultado(r.lineas.some(function (l) { return l.charAt(0) === '⚠'; }) ? 'aviso' : 'ok', 'Apuntado en efectivo', r.lineas);
+    cargar(true, function () { pintarLateral(); var x = $('resultado') ? $('resultado').outerHTML : ''; pintarEfectivo($('contenido')); if (x) $('contenido').insertAdjacentHTML('afterbegin', x); });
+  }, tipoEfectivo === 'gasto');
+}
+
+/* ---------------------------------------------------------------
+   ENVIAR AL SERVIDOR
+   --------------------------------------------------------------- */
+
+function enviar(texto, funcion, datos, alAcabar, conArchivo) {
+  if (ocupado) return;
+  ocupado = true;
+  $('guardar').disabled = true;
+  cargando(true, texto);
+  (conArchivo ? leerArchivo(archivo) : Promise.resolve(null)).then(function (fichero) {
+    if (fichero && typeof datos === 'object') datos.archivo = fichero;
+    google.script.run
+      .withSuccessHandler(function (r) { ocupado = false; cargando(false); $('guardar').disabled = false; estado(''); alAcabar(r); })
+      .withFailureHandler(fallo)[funcion](datos);
+  }, fallo);
+}
+
+$('guardar').addEventListener('click', function () {
+  if (S === 'traspaso') guardarTraspaso();
+  else if (S === 'transferencia') guardarNuevaTransferencia();
+  else if (S === 'efectivo') guardarEfectivoAhora();
+  else guardarAsiento();
+});
+$('cerrar').addEventListener('click', function () {
+  if (hayCambios() && !confirm('Hay cambios sin guardar. ¿Cerrar igualmente?')) return;
+  google.script.host.close();
+});
+$('recargar').addEventListener('click', function () {
+  if (hayCambios() && !confirm('Se perderán los cambios sin guardar. ¿Recargar?')) return;
+  archivo = null; cargar(false, pintarPrincipal);
+});
+$('buscar').addEventListener('input', pintarLista);
+document.querySelectorAll('#secciones button').forEach(function (b) {
+  b.addEventListener('click', function () { if (b.dataset.s !== S || hecho) irA(b.dataset.s); });
+});
+
+cargar(false, function () {
+  if (INICIAL && LISTAS[S] && D.asientos.some(function (a) { return a.id === INICIAL && enLista(S, a); })) sel = INICIAL;
+  else if (LISTAS[S]) { var xs = listaDe(S); sel = xs.length ? xs[0].id : ''; }
+  pintarLateral();
+  pintarPrincipal();
+});
+</script>
+</body>
+</html>

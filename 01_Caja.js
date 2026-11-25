@@ -79,9 +79,13 @@ function filaDeCaja(v, fila) {
     fechaPago: fecha('Fecha de pago'),
     saldoExtracto: num('Saldo extracto'),
     bdSocios: texto('BD Socios'),
-    huella: texto('Huella extracto')
+    huella: texto('Huella extracto'),
+    asunto: texto('Asunto transferencia')
   };
-  f.fechaEfectiva = f.fechaPago || f.fecha;
+  // Pendiente = ordenado pero aún no ha salido del banco: no tiene fecha
+  // efectiva, y por eso no entra en saldos ni informes a fecha.
+  f.pendiente = !f.fechaPago && texto('Fecha de pago').toUpperCase() === CAJA.PENDIENTE.toUpperCase();
+  f.fechaEfectiva = f.pendiente ? null : (f.fechaPago || f.fecha);
   f.esEfectivo = f.metodo === CAJA.EFECTIVO;
   return f;
 }
@@ -144,7 +148,32 @@ function alEditarCaja(e) {
   const desde = Math.max(e.range.getRow(), CAJA.PRIMERA_FILA);
   const hasta = e.range.getLastRow();
   if (hasta < desde) return;
+  quitarNombresDeOpciones(e.range.getSheet(), e.range, desde, hasta);
   completarFilas(e.range.getSheet(), desde, hasta);
+}
+
+/**
+ * Los desplegables de Partida y Subpartida ofrecen «G21 · Convivencia de
+ * otoño» para poder buscar por el nombre; en la celda queda solo «G21»,
+ * que es lo que leen Cuentas, las actividades y el resto del código.
+ */
+function quitarNombresDeOpciones(h, rango, desde, hasta) {
+  ['Partida', 'Subpartida'].forEach(nombre => {
+    const c = colCaja(nombre);
+    if (rango.getColumn() > c || rango.getLastColumn() < c) return;
+    const r = h.getRange(desde, c, hasta - desde + 1, 1);
+    const v = r.getValues();
+    let cambia = false;
+    v.forEach(x => { const k = codigoDeOpcion(x[0]); if (k !== x[0]) { x[0] = k; cambia = true; } });
+    if (cambia) r.setValues(v);
+  });
+}
+
+/** «G21 · Convivencia de otoño» → «G21». Lo que no lleva nombre, igual. Pura. */
+function codigoDeOpcion(v) {
+  if (typeof v !== 'string') return v;
+  const i = v.indexOf(CAJA.SEPARADOR_OPCION.trim());
+  return i > 0 ? v.slice(0, i).trim() : v;
 }
 
 /**
@@ -341,14 +370,10 @@ function dividirAsientoSeleccionado() {
 // que el importador no crea otra de efectivo.
 // ==================================================================
 
-function abrirApuntarTraspaso() {
-  const hoy = new Date();
-  const t = HtmlService.createTemplateFromFile('Traspaso');
-  t.hoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-  SpreadsheetApp.getUi().showModalDialog(t.evaluate().setWidth(440).setHeight(400), 'Traspaso entre banco y efectivo');
-}
+/** El traspaso se apunta en la ventana de asientos (08_Asientos.js). */
+function abrirApuntarTraspaso() { abrirAsientos('traspaso'); }
 
-/** Lo llama Traspaso.html. datos: { tipo: 'ingreso'|'retirada', fecha: 'aaaa-mm-dd', importe, descripcion }. */
+/** Lo llama Asientos.html. datos: { tipo: 'ingreso'|'retirada', fecha: 'aaaa-mm-dd', importe, descripcion }. */
 function apuntarTraspaso(datos) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const h = ss.getSheetByName(HOJAS.CAJA);

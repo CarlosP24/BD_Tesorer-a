@@ -46,7 +46,13 @@ const CAJA = {
     // Técnicas, las escribe el script:
     'Saldo extracto',  // saldo que dice el banco tras ese movimiento
     'BD Socios',       // qué se ha hecho con la cuota en BD Socios
-    'Huella extracto'  // identifica el movimiento del banco (oculta)
+    'Huella extracto', // identifica el movimiento del banco (oculta)
+    // De las transferencias apuntadas desde la ventana de asientos: lo
+    // que hay que escribir en el concepto de la transferencia en la app
+    // del banco. Empieza siempre por el ID del asiento, que es lo que
+    // permite reconocerla luego en el extracto (02_Extractos.js). Va al
+    // final para no mover ninguna letra.
+    'Asunto transferencia'
   ],
 
   ANCHOS: {
@@ -54,7 +60,8 @@ const CAJA = {
     'Partida': 75, 'Subpartida': 90, 'ID socio': 110, 'Proveedor': 170,
     'CIF proveedor': 105, 'Cantidad': 95, 'Saldo': 100, 'Factura': 200,
     'Método de pago': 125, 'Cuenta de abono': 190, 'Titular': 160,
-    'Fecha de pago': 95, 'Saldo extracto': 100, 'BD Socios': 260, 'Huella extracto': 120
+    'Fecha de pago': 95, 'Saldo extracto': 100, 'BD Socios': 260, 'Huella extracto': 120,
+    'Asunto transferencia': 260
   },
 
   // Una fila es de la caja de efectivo si su método de pago es este. El
@@ -79,6 +86,20 @@ const CAJA = {
   // banco pueda compensarla mientras no ha llegado (el saldo del banco
   // = saldo de Caja − lo de «Ejercicio anterior» que aún no ha entrado).
   EJERCICIO_ANTERIOR: 'Ejercicio anterior',
+
+  // Valor de «Fecha de pago» de un pago ordenado que aún no ha salido del
+  // banco (las transferencias apuntadas desde la ventana de asientos).
+  // Decisión de tesorería: cuenta en Cuentas y en las hojas de actividad
+  // (es gasto comprometido) pero NO en el saldo ni en los informes a
+  // fecha (criterio de caja). Al importar el extracto que la trae, se
+  // reconoce por el ID en el concepto y toma la fecha del banco.
+  PENDIENTE: 'Pendiente',
+
+  // Los desplegables de Partida y Subpartida ofrecen «G21 · Convivencia»
+  // para poder buscar por el nombre; al elegir, onEdit deja solo el
+  // código (codigoDeOpcion()). Por eso los códigos solos también están
+  // en la lista, al final: si no, la celda con «G21» sería no válida.
+  SEPARADOR_OPCION: ' · ',
 
   FORMATO_EUROS: '#,##0.00 "€";-#,##0.00 "€"',
   FORMATO_FECHA: 'dd/MM/yyyy'
@@ -326,7 +347,10 @@ function montarCaja(ss) {
   h.getRange('A1:A2').setValues([['Saldo inicial'], ['Saldo actual']]).setFontWeight('bold');
   h.getRange('D1').setFormula('=B1+C1');
   const e = `${L('Partida')}${P}:${L('Partida')}`;
-  const noAnterior = `${e}, "<>${CAJA.EJERCICIO_ANTERIOR}"`;
+  const fp = `${L('Fecha de pago')}${P}:${L('Fecha de pago')}`;
+  // Ni lo del ejercicio anterior (ya está en el inicial) ni lo pendiente
+  // (aún no ha salido del banco).
+  const noAnterior = `${e}, "<>${CAJA.EJERCICIO_ANTERIOR}", ${fp}, "<>${CAJA.PENDIENTE}"`;
   h.getRange('B2').setFormula(`=SALDO_INICIAL_BANCO+SUMIFS(${c}, ${m}, "<>${CAJA.EFECTIVO}", ${noAnterior})`);
   h.getRange('C2').setFormula(`=SALDO_INICIAL_EFECTIVO+SUMIFS(${c}, ${m}, "${CAJA.EFECTIVO}", ${noAnterior})`);
   h.getRange('D2').setFormula('=B2+C2');
@@ -347,7 +371,7 @@ function montarCaja(ss) {
   const filas = h.getMaxRows() - P + 1;
   const col = nombre => h.getRange(P, colCaja(nombre), filas, 1);
   ['ID Transacción', 'ID socio', 'CIF proveedor', 'Partida', 'Subpartida', 'Cuenta de abono',
-   'Huella extracto'].forEach(x => col(x).setNumberFormat('@'));
+   'Huella extracto', 'Asunto transferencia'].forEach(x => col(x).setNumberFormat('@'));
   ['Fecha', 'Fecha de pago'].forEach(x => col(x).setNumberFormat(CAJA.FORMATO_FECHA));
   ['Cantidad', 'Saldo', 'Saldo extracto'].forEach(x => col(x).setNumberFormat(CAJA.FORMATO_EUROS));
   col('Concepto Banco').setWrap(false);
@@ -364,15 +388,20 @@ function montarCaja(ss) {
   const fecha = SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false)
     .setHelpText('Una fecha (dd/mm/aaaa).').build();
   col('Fecha').setDataValidation(fecha);
-  col('Fecha de pago').setDataValidation(fecha);
+  const fpCelda = `${L('Fecha de pago')}${P}`;
+  col('Fecha de pago').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireFormulaSatisfied(`=OR(ISNUMBER(${fpCelda}), ${fpCelda}="${CAJA.PENDIENTE}")`).setAllowInvalid(false)
+    .setHelpText(`Una fecha (dd/mm/aaaa), o «${CAJA.PENDIENTE}» si el pago está ordenado pero aún no ha salido del banco.`).build());
   col('Partida').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInRange(listas.getRange('A2:A'), true).setAllowInvalid(false)
-    .setHelpText('Una partida del Presupuesto; «Traspaso» para mover dinero entre banco y efectivo; '
+    .setHelpText('Escribe el código o parte del nombre y elige: en la celda queda solo el código. '
+      + '«Traspaso» para mover dinero entre banco y efectivo; '
       + '«Ejercicio anterior» para lo que llega ahora al banco pero ya está en el saldo inicial (no cuenta en nada). '
       + 'Si falta una, añádela en la hoja Presupuesto.').build());
   col('Subpartida').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInRange(listas.getRange('B2:B'), true).setAllowInvalid(true)
-    .setHelpText('Las subpartidas se definen en la hoja de cada actividad.').build());
+    .setHelpText('Escribe el código o parte del nombre y elige: en la celda queda solo el código. '
+      + 'Las subpartidas se definen en la hoja de cada actividad.').build());
   col('Método de pago').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInList(CAJA.METODOS, true).setAllowInvalid(false)
     .setHelpText('«Efectivo» cuenta en el saldo de efectivo; todo lo demás, en el del banco.').build());
@@ -401,6 +430,8 @@ function montarCaja(ss) {
   regla(h.getRange(`${L('Fecha de pago')}${P + 1}:${L('Fecha de pago')}`),
     `=AND(ISNUMBER($${L('Fecha de pago')}${P + 1}), ISNUMBER($${L('Fecha de pago')}${P}), `
     + `$${L('Fecha de pago')}${P + 1}<$${L('Fecha de pago')}${P})`, NARANJA);
+  // Pago ordenado que aún no ha salido del banco.
+  regla(R('Fecha de pago'), `=$${L('Fecha de pago')}${P}="${CAJA.PENDIENTE}"`, '#DCEBFA');
   // Subpartida que no es de su partida (G21A solo vale con G21).
   regla(R('Subpartida'), `=AND($${L('Subpartida')}${P}<>"", `
     + `LEFT($${L('Subpartida')}${P}, LEN($${L('Partida')}${P}))<>$${L('Partida')}${P})`, ROJO);
@@ -437,19 +468,23 @@ function montarCaja(ss) {
  * columna Saldo. Lleva dos acumulados, uno para el banco y otro para el
  * efectivo: cada fila muestra el saldo de SU cuenta tras ese movimiento.
  * Por eso Caja tiene que estar ordenada por fecha de pago. Las filas de
- * «Ejercicio anterior» cuentan 0: ya están en el saldo inicial. En
- * sintaxis inglesa: escríbela dentro de conFormulasEnIngles().
+ * «Ejercicio anterior» cuentan 0: ya están en el saldo inicial. Las
+ * pendientes («Pendiente» en Fecha de pago) cuentan 0 y no enseñan saldo:
+ * el dinero aún no ha salido. En sintaxis inglesa: escríbela dentro de
+ * conFormulasEnIngles().
  */
 function formulaDeSaldo() {
   const L = letraCaja, P = CAJA.PRIMERA_FILA;
   const c = `${L('Cantidad')}${P}:${L('Cantidad')}`;
   const m = `${L('Método de pago')}${P}:${L('Método de pago')}`;
   const e = `${L('Partida')}${P}:${L('Partida')}`;
+  const fp = `${L('Fecha de pago')}${P}:${L('Fecha de pago')}`;
   return `={"Saldo"; ARRAYFORMULA(LET(cantidad, ${c}, esEfectivo, ${m}="${CAJA.EFECTIVO}", `
-    + `importe, IF(ISNUMBER(cantidad)*(${e}<>"${CAJA.EJERCICIO_ANTERIOR}"), cantidad, 0), `
+    + `pagado, ISNUMBER(cantidad)*(${fp}<>"${CAJA.PENDIENTE}"), `
+    + `importe, IF(pagado*(${e}<>"${CAJA.EJERCICIO_ANTERIOR}"), cantidad, 0), `
     + `acumBanco, SCAN(0, IF(esEfectivo, 0, importe), LAMBDA(acum, valor, acum + valor)), `
     + `acumEfectivo, SCAN(0, IF(esEfectivo, importe, 0), LAMBDA(acum, valor, acum + valor)), `
-    + `IF(ISNUMBER(cantidad), IF(esEfectivo, SALDO_INICIAL_EFECTIVO + acumEfectivo, SALDO_INICIAL_BANCO + acumBanco), )))}`;
+    + `IF(pagado, IF(esEfectivo, SALDO_INICIAL_EFECTIVO + acumEfectivo, SALDO_INICIAL_BANCO + acumBanco), )))}`;
 }
 
 
@@ -664,8 +699,16 @@ function montarListas(ss) {
   const h = ss.getSheetByName(HOJAS.LISTAS);
   const P = PRESUPUESTO.PRIMERA_FILA, pres = HOJAS.PRESUPUESTO;
   h.getRange('A1:C1').setValues([['Partidas', 'Subpartidas', 'Métodos de pago']]).setFontWeight('bold');
-  h.getRange('A2').setFormula(`={IFERROR(FILTER(${pres}!A${P}:A, ${pres}!A${P}:A<>""), ); `
-    + `IFERROR(FILTER(${pres}!E${P}:E, ${pres}!E${P}:E<>""), ); "${CAJA.TRASPASO}"; "${CAJA.EJERCICIO_ANTERIOR}"}`);
+  // Primero «código · nombre», para poder buscar por el nombre; después
+  // los códigos solos, que es lo que queda en la celda (ver
+  // CAJA.SEPARADOR_OPCION). Una partida sin descripción sale una sola vez.
+  const S = CAJA.SEPARADOR_OPCION;
+  const conNombre = (cod, desc) => `IFERROR(FILTER(${pres}!${cod}${P}:${cod}&IF(${pres}!${desc}${P}:${desc}="", "", `
+    + `"${S}"&${pres}!${desc}${P}:${desc}), ${pres}!${cod}${P}:${cod}<>""), )`;
+  const soloCodigo = (cod, desc) => `IFERROR(FILTER(${pres}!${cod}${P}:${cod}, ${pres}!${cod}${P}:${cod}<>"", `
+    + `${pres}!${desc}${P}:${desc}<>""), )`;
+  h.getRange('A2').setFormula(`={${conNombre('A', 'C')}; ${conNombre('E', 'G')}; `
+    + `"${CAJA.TRASPASO}"; "${CAJA.EJERCICIO_ANTERIOR}"; ${soloCodigo('A', 'C')}; ${soloCodigo('E', 'G')}}`);
   h.getRange('C2:C').clearContent();
   h.getRange(2, 3, CAJA.METODOS.length, 1).setValues(CAJA.METODOS.map(x => [x]));
 }
@@ -754,7 +797,7 @@ function protegerHojas(ss) {
 
   const caja = ss.getSheetByName(HOJAS.CAJA);
   const L = letraCaja, P = CAJA.PRIMERA_FILA;
-  ['A1:A3', 'B2:C3', `D1:${L('Huella extracto')}3`].forEach(a =>
+  ['A1:A3', 'B2:C3', `D1:${letraDeColumna(CAJA.COLUMNAS.length)}3`].forEach(a =>
     proteger(caja.getRange(a), 'cabecera y saldos (se calculan solos)', true));
   proteger(caja.getRange(`A${P}:A`), 'ID de transacción (lo asigna el script)', true);
   proteger(caja.getRange(`${L('Saldo')}${P}:${L('Saldo')}`), 'saldo (fórmula)', true);
@@ -875,41 +918,92 @@ function carpetaDelEjercicio(claveConfig, ss) {
 // MENÚ Y DISPARADORES SIMPLES
 // ==================================================================
 
+/**
+ * El menú Tesorería, entero en un solo sitio (como el menú JMV de BD
+ * Socios). Arriba, destacado, el traspaso entre banco y efectivo: es lo
+ * que hay que apuntar ANTES de ingresar efectivo en el banco, o el
+ * extracto lo tomará por una cuota (ver «TRASPASOS» en 02_Extractos.js).
+ * Después, lo de cada día (extracto y ventanas de asientos); luego lo de
+ * cada cierto tiempo; y al final, en submenús, lo técnico.
+ *
+ * Cada opción nombra su función por texto y solo aparece si existe en el
+ * proyecto (limpiarMenu()). Si añades una función de menú, añádela aquí.
+ */
+function entradasDelMenu() {
+  return [
+    ['⇄ Traspaso entre banco y efectivo…', 'abrirApuntarTraspaso'],
+    '-',
+    ['Importar extracto bancario…', 'abrirImportarExtracto'],
+    ['Nuevo gasto por transferencia…', 'abrirNuevaTransferencia'],
+    ['Completar movimientos del banco (tarjeta…)…', 'abrirMovimientosPorCompletar'],
+    ['Facturas que faltan…', 'abrirFacturasQueFaltan'],
+    ['Ingreso o gasto en efectivo…', 'abrirEfectivo'],
+    '-',
+    ['Sincronizar cuotas con BD Socios', 'sincronizarConBdSociosAhora'],
+    ['Generar informe contable…', 'abrirInformes'],
+    '-',
+    { sub: 'Caja', entradas: [
+      ['Ordenar por fecha de pago', 'ordenarCajaAhora'],
+      ['Asignar los ID de transacción que falten', 'asignarIdsQueFaltan'],
+      ['Dividir el asiento seleccionado…', 'dividirAsientoSeleccionado'],
+      '-',
+      ['Convertir el asiento seleccionado en traspaso', 'convertirEnTraspasoSeleccionado'],
+      ['El asiento seleccionado no es un traspaso', 'deshacerTraspasoSeleccionado'],
+      '-',
+      ['Adjuntar factura al asiento seleccionado…', 'abrirAdjuntarFactura'],
+      ['Vincular facturas subidas a la carpeta', 'vincularFacturasDeLaCarpeta']
+    ] },
+    { sub: 'Actividades', entradas: [
+      ['Nueva hoja de actividad…', 'abrirNuevaActividad'],
+      ['Nueva hoja de financiación…', 'abrirNuevaFinanciacion'],
+      ['Actualizar la lista de subpartidas', 'actualizarListaSubpartidasAhora']
+    ] },
+    { sub: 'Ejercicio', entradas: [
+      ['Crear estructura', 'crearEstructura'],
+      ['Reparar fórmulas, formatos y protecciones', 'repararEstructura'],
+      '-',
+      ['Crear el ejercicio siguiente…', 'crearEjercicioSiguiente'],
+      ['Traer los saldos iniciales del ejercicio anterior', 'traerSaldosInicialesDelAnterior']
+    ] },
+    { sub: 'Diagnóstico', entradas: [
+      ['Diagnóstico del sistema', 'diagnostico'],
+      ['Ejecutar las pruebas', 'ejecutarPruebas'],
+      '-',
+      ['Instalar sincronización automática (cada hora)', 'instalarSincronizacionAutomatica'],
+      ['Quitar sincronización automática', 'quitarSincronizacionAutomatica']
+    ] }
+  ];
+}
+
+/**
+ * Quita las opciones cuya función no existe, los submenús que se quedan
+ * vacíos y los separadores sobrantes. Pura (recibe `existe`).
+ */
+function limpiarMenu(entradas, existe) {
+  const salida = [];
+  entradas.forEach(e => {
+    if (e === '-') { if (salida.length && salida[salida.length - 1] !== '-') salida.push('-'); return; }
+    if (Array.isArray(e)) { if (existe(e[1])) salida.push(e); return; }
+    const dentro = limpiarMenu(e.entradas, existe);
+    if (dentro.length) salida.push({ sub: e.sub, entradas: dentro });
+  });
+  while (salida.length && salida[salida.length - 1] === '-') salida.pop();
+  return salida;
+}
+
+function pintarMenu(ui, menu, entradas) {
+  entradas.forEach(e => {
+    if (e === '-') menu.addSeparator();
+    else if (Array.isArray(e)) menu.addItem(e[0], e[1]);
+    else menu.addSubMenu(pintarMenu(ui, ui.createMenu(e.sub), e.entradas));
+  });
+  return menu;
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Tesorería')
-    .addItem('Importar extracto bancario…', 'abrirImportarExtracto')
-    .addItem('Sincronizar cuotas con BD Socios', 'sincronizarConBdSociosAhora')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('Caja')
-      .addItem('Ordenar por fecha de pago', 'ordenarCajaAhora')
-      .addItem('Asignar los ID de transacción que falten', 'asignarIdsQueFaltan')
-      .addItem('Dividir el asiento seleccionado…', 'dividirAsientoSeleccionado')
-      .addItem('Apuntar traspaso entre banco y efectivo…', 'abrirApuntarTraspaso')
-      .addItem('Convertir el asiento seleccionado en traspaso', 'convertirEnTraspasoSeleccionado')
-      .addItem('El asiento seleccionado no es un traspaso', 'deshacerTraspasoSeleccionado')
-      .addSeparator()
-      .addItem('Adjuntar factura al asiento seleccionado…', 'abrirAdjuntarFactura')
-      .addItem('Vincular facturas subidas a la carpeta', 'vincularFacturasDeLaCarpeta'))
-    .addSubMenu(ui.createMenu('Actividades')
-      .addItem('Nueva hoja de actividad…', 'abrirNuevaActividad')
-      .addItem('Nueva hoja de financiación…', 'abrirNuevaFinanciacion')
-      .addItem('Actualizar la lista de subpartidas', 'actualizarListaSubpartidasAhora'))
-    .addItem('Generar informe contable…', 'abrirInformes')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('Ejercicio')
-      .addItem('Crear estructura', 'crearEstructura')
-      .addItem('Reparar fórmulas, formatos y protecciones', 'repararEstructura')
-      .addSeparator()
-      .addItem('Crear el ejercicio siguiente…', 'crearEjercicioSiguiente')
-      .addItem('Traer los saldos iniciales del ejercicio anterior', 'traerSaldosInicialesDelAnterior'))
-    .addSubMenu(ui.createMenu('Diagnóstico')
-      .addItem('Diagnóstico del sistema', 'diagnostico')
-      .addItem('Ejecutar las pruebas', 'ejecutarPruebas')
-      .addSeparator()
-      .addItem('Instalar sincronización automática (cada hora)', 'instalarSincronizacionAutomatica')
-      .addItem('Quitar sincronización automática', 'quitarSincronizacionAutomatica'))
-    .addToUi();
+  const existe = nombre => typeof globalThis[nombre] === 'function';
+  pintarMenu(ui, ui.createMenu('Tesorería'), limpiarMenu(entradasDelMenu(), existe)).addToUi();
 }
 
 /**

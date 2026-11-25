@@ -26,6 +26,14 @@
 /** Días de margen para reconocer un movimiento ya apuntado a mano. */
 const DIAS_FUSION = 7;
 
+/**
+ * Una transferencia pendiente (ordenada desde la ventana de asientos) se
+ * reconoce por su ID en el concepto. Si el banco lo hubiera cortado, por
+ * el importe, siendo una transferencia y como mucho estos días después de
+ * la Fecha del asiento (la factura puede ser de bastante antes del pago).
+ */
+const DIAS_PENDIENTE = 120;
+
 
 // ==================================================================
 // ENTRADA
@@ -123,7 +131,9 @@ function importarExtractoBloqueado(blob, opciones) {
     };
     poner('Concepto Banco', m.concepto);
     poner('Método de pago', metodoDeConcepto(m.concepto, m.importe));
-    poner('Fecha de pago', m.fecha);
+    // Una transferencia pendiente ya ha salido: su fecha de pago es la del banco.
+    if (x.pendiente) celdaCaja(h, fila, 'Fecha de pago').setValue(m.fecha);
+    else poner('Fecha de pago', m.fecha);
     celdaCaja(h, fila, 'Saldo extracto').setValue(m.saldo === null ? '' : m.saldo);
     celdaCaja(h, fila, 'Huella extracto').setValue(m.huella);
     if (m.traspaso) {
@@ -154,13 +164,17 @@ function importarExtractoBloqueado(blob, opciones) {
     lineas.push(`⚠ ${tras.cuotasSinApuntar} ingresos de efectivo nombran a socios cuya cuota no está apuntada en Caja. `
       + 'Apúntala en Efectivo, con su ID de socio y la fecha en que se cobró: lo dice la nota de su Concepto Banco.');
   }
-  if (plan.fusiones.length) lineas.push(`Ya apuntados a mano y completados con los datos del banco: `
-    + plan.fusiones.map(x => x.id || 'fila ' + x.fila).join(', ') + '.');
+  const pagadas = plan.fusiones.filter(x => x.pendiente), aMano = plan.fusiones.filter(x => !x.pendiente);
+  if (pagadas.length) lineas.push(`Transferencias pendientes que ya han salido del banco (ahora con su fecha de pago): `
+    + pagadas.map(x => x.id || 'fila ' + x.fila).join(', ') + '.');
+  if (aMano.length) lineas.push(`Ya apuntados a mano y completados con los datos del banco: `
+    + aMano.map(x => x.id || 'fila ' + x.fila).join(', ') + '.');
   if (plan.duplicados.length) lineas.push(`Ya importados antes (no se repiten): ${plan.duplicados.length}.`);
   if (plan.fuera.length) lineas.push(`Fuera del ejercicio ${aj.ejercicio} (no se importan): ${plan.fuera.length}.`);
   const dudosos = plan.nuevos.filter(m => m.aviso).length;
   if (dudosos) lineas.push(`⚠ ${dudosos} movimientos nuevos se parecen a asientos apuntados a mano: `
-    + 'lo dice la nota de su Concepto Banco. Borra el que sobre.');
+    + 'lo dice la nota de su Concepto Banco. Si son el mismo, pasa a la fila del banco lo que falte y borra la apuntada a mano '
+    + '(la del banco no: el siguiente extracto la volvería a meter).');
   if (ident) {
     const id = cuenta.codigo + cuenta.nombre + cuenta.tutor;
     if (id) lineas.push(`Cuotas identificadas: ${id} (${cuenta.codigo} por número de socio, `
@@ -460,6 +474,10 @@ function huellaDeMovimiento(m) {
 function metodoDeConcepto(concepto, importe) {
   const t = normalizarTexto(concepto);
   if (/\bBIZUM\b/.test(t)) return 'Bizum';
+  // Antes que lo demás: el concepto que escribe quien transfiere puede
+  // decir «compra», «gastos»… («Transferencia A Favor De X, Concepto
+  // 20261015-01 Gastos de convivencia»).
+  if (/^TRANSF/.test(t)) return 'Transferencia';
   if (/REINTEGRO|RETIRADA|DISPOSICION|EXTRACCION/.test(t) || (/\bCAJERO\b/.test(t) && importe < 0)) return 'Retirada en cajero';
   if (/\bCAJERO\b|INGRESO EN EFECTIVO|INGRESO ANONIMO/.test(t)) return 'Ingreso en cajero';
   if (/TARJETA|COMPRA\b|PAGO CON TARJ|\bTPV\b/.test(t)) return 'Tarjeta';
@@ -471,9 +489,10 @@ function metodoDeConcepto(concepto, importe) {
 
 /**
  * Qué hacer con cada movimiento:
- * { nuevos, fusiones: [{ fila, id, m }], duplicados, fuera }
+ * { nuevos, fusiones: [{ fila, id, m, pendiente }], duplicados, fuera }
  * Cada movimiento sale con su `huella` y, si se parece a más de un
- * asiento apuntado a mano, con un `aviso`.
+ * asiento apuntado a mano, con un `aviso`. `pendiente`: la fusión es una
+ * transferencia que estaba pendiente y ahora ha salido del banco.
  */
 function planificarImportacion(movs, caja, inicio, fin) {
   const huellas = {};
@@ -481,29 +500,66 @@ function planificarImportacion(movs, caja, inicio, fin) {
   // Candidatos a ser el mismo movimiento apuntado a mano antes de importar:
   // del banco (no efectivo) y sin huella todavía.
   const aMano = caja.filter(f => !f.huella && f.cantidad !== null && !f.esEfectivo && f.fechaEfectiva);
+  // Transferencias ordenadas desde la ventana de asientos que aún no han salido.
+  const pendientes = caja.filter(f => f.pendiente && !f.huella && f.cantidad !== null && !f.esEfectivo && f.fecha);
+  const porId = {};
+  aMano.concat(pendientes).forEach(f => { if (f.id) porId[f.id] = f; });
   const usadas = {};
   const plan = { nuevos: [], fusiones: [], duplicados: [], fuera: [] };
+  const fusionar = (f, m) => {
+    usadas[f.fila] = true;
+    plan.fusiones.push({ fila: f.fila, id: f.id, m: m, pendiente: !!f.pendiente });
+  };
 
   movs.forEach(m => {
     if (m.fecha < inicio || m.fecha > fin) { plan.fuera.push(m); return; }
     m.huella = huellaDeMovimiento(m);
     if (huellas[m.huella]) { plan.duplicados.push(m); return; }
     huellas[m.huella] = true;
+    const avisos = [];
+
+    // 1. El concepto nombra el asiento: el asunto de las transferencias
+    //    que se ordenan desde la ventana empieza por su ID.
+    const nombrados = idsDeAsientoEnConcepto(m.concepto).map(id => porId[id]).filter(f => f && !usadas[f.fila]);
+    const exacto = nombrados.find(f => redondear(f.cantidad) === m.importe);
+    if (exacto) { fusionar(exacto, m); return; }
+    if (nombrados.length) {
+      const f = nombrados[0];
+      avisos.push(`El concepto nombra el asiento ${f.id}, pero allí el importe es ${euros(f.cantidad)} y en el banco `
+        + `${euros(m.importe)}. Si es el mismo pago, pasa a esta fila lo que falte (partida, proveedor, factura…) y borra la de ${f.id}.`);
+    }
+
+    // 2. Mismo importe y fecha parecida.
     const parecidos = aMano.filter(f => !usadas[f.fila] && redondear(f.cantidad) === m.importe
-      && Math.abs(diasEntre(f.fechaEfectiva, m.fecha)) <= DIAS_FUSION);
-    if (parecidos.length === 1) {
-      usadas[parecidos[0].fila] = true;
-      plan.fusiones.push({ fila: parecidos[0].fila, id: parecidos[0].id, m: m });
-      return;
+        && Math.abs(diasEntre(f.fechaEfectiva, m.fecha)) <= DIAS_FUSION)
+      .concat(pendientes.filter(f => !usadas[f.fila] && m.importe < 0 && redondear(f.cantidad) === m.importe
+        && metodoDeConcepto(m.concepto, m.importe) === 'Transferencia'
+        && diasEntre(f.fecha, m.fecha) >= -DIAS_FUSION && diasEntre(f.fecha, m.fecha) <= DIAS_PENDIENTE));
+    if (parecidos.length === 1 && !nombrados.length) { fusionar(parecidos[0], m); return; }
+    if (parecidos.length) {
+      avisos.push('Puede ser el mismo movimiento que '
+        + parecidos.map(f => (f.id || 'la fila ' + f.fila) + (f.pendiente ? ' (transferencia pendiente)' : '')).join(' o ')
+        + ', apuntados a mano. Si es así, pasa a esta fila lo que falte y borra la otra.');
     }
-    if (parecidos.length > 1) {
-      m.aviso = 'Puede ser el mismo movimiento que '
-        + parecidos.map(f => f.id || 'la fila ' + f.fila).join(' o ')
-        + ', apuntados a mano. Si es así, borra la fila que sobre.';
-    }
+    if (avisos.length) m.aviso = avisos.join('\n\n');
     plan.nuevos.push(m);
   });
   return plan;
+}
+
+/**
+ * IDs de asiento (AAAAMMDD-NN) que aparecen en un concepto del banco, con
+ * o sin el guion. Puro.
+ */
+function idsDeAsientoEnConcepto(concepto) {
+  const r = [];
+  const re = /(?:^|\D)(20\d{6})[-‐–\s]?(\d{2,3})(?!\d)/g;
+  let x;
+  while ((x = re.exec(String(concepto || ''))) !== null) {
+    const id = x[1] + '-' + x[2];
+    if (fechaDeTexto(`${x[1].slice(0, 4)}-${x[1].slice(4, 6)}-${x[1].slice(6)}`) && r.indexOf(id) < 0) r.push(id);
+  }
+  return r;
 }
 
 function diasEntre(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
@@ -527,7 +583,7 @@ function diasEntre(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400
 //   - una RETIRADA de cajero es siempre traspaso;
 //   - un INGRESO en cajero es un cobro, salvo que tesorería haya
 //     declarado el traspaso: su pata de efectivo ya apuntada (Caja →
-//     Apuntar traspaso) o la fila del banco marcada a mano Traspaso.
+//     ⇄ Traspaso) o la fila del banco marcada a mano Traspaso.
 // ==================================================================
 
 /** 'retirada', 'ingreso' (candidato) o '' para un movimiento del extracto. */
@@ -631,7 +687,7 @@ function descuadresDeSaldo(filas, iniciales) {
   let banco = iniciales.banco, efectivo = iniciales.efectivo;
   const mal = [];
   filas.forEach(f => {
-    if (f.cantidad === null) return;
+    if (f.cantidad === null || f.pendiente) return;   // pendiente: aún no ha salido del banco
     if (anterior(f)) pendiente = redondear(pendiente - f.cantidad);
     else if (f.partida === CAJA.EJERCICIO_ANTERIOR) { /* efectivo: no se compara con nada */ }
     else if (f.esEfectivo) efectivo = redondear(efectivo + f.cantidad);

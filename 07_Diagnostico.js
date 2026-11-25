@@ -19,7 +19,7 @@ function diagnostico() {
   // Archivos del proyecto.
   const funciones = { leerCaja: () => leerCaja, leerExtracto: () => leerExtracto, identificarSocio: () => identificarSocio,
     planificarSincronizacion: () => planificarSincronizacion, calcularInforme: () => calcularInforme,
-    hojasDeActividad: () => hojasDeActividad, saldosALaFecha: () => saldosALaFecha };
+    hojasDeActividad: () => hojasDeActividad, saldosALaFecha: () => saldosALaFecha, datosDeAsientos: () => datosDeAsientos };
   const faltan = Object.keys(funciones).filter(k => { try { return typeof funciones[k]() !== 'function'; } catch (e) { return true; } });
   if (faltan.length) error('Faltan funciones (¿falta algún archivo del proyecto?): ' + faltan.join(', '));
 
@@ -107,7 +107,10 @@ function diagnostico() {
     if (desorden) aviso(`Caja no está ordenada por fecha de pago (${desorden} saltos): Tesorería → Caja → Ordenar.`);
     const desc = descuadresDeSaldo(filas, saldosIniciales(ss));
     if (desc.length) aviso(`El saldo no coincide con el del banco en ${desc.length} filas (la primera, ${desc[0].id}).`);
-    const fuera = filas.filter(f => f.fecha && (f.fechaEfectiva < aj.inicio || f.fechaEfectiva > aj.fin));
+    const fuera = filas.filter(f => f.fecha && f.fechaEfectiva && (f.fechaEfectiva < aj.inicio || f.fechaEfectiva > aj.fin));
+    const viejas = filas.filter(f => f.pendiente && f.fecha && diasEntre(f.fecha, new Date()) > 30);
+    if (viejas.length) aviso(`${viejas.length} transferencias pendientes desde hace más de un mes: ${viejas.slice(0, 5).map(f => f.id).join(', ')}. `
+      + '¿Se ordenaron en el banco? ¿Se ha importado el extracto que las trae? Tesorería → Nuevo gasto por transferencia… → Pendientes.');
     if (fuera.length) aviso(`${fuera.length} asientos con fecha de pago fuera del ejercicio: ${fuera.slice(0, 5).map(f => f.id).join(', ')}.`);
     if (partidas) {
       const conocidas = {};
@@ -120,7 +123,7 @@ function diagnostico() {
     const sueltas = emparejarTraspasos(filas).sueltas;
     if (sueltas.length) aviso(`Traspasos sin su otra pata (banco ↔ efectivo, mismo importe con signo contrario): `
       + sueltas.slice(0, 8).map(f => f.id || 'fila ' + f.fila).join(', ') + (sueltas.length > 8 ? '…' : '')
-      + '. Tesorería → Caja → Apuntar traspaso, o corrige la que esté mal.');
+      + '. Tesorería → ⇄ Traspaso entre banco y efectivo, o corrige la que esté mal.');
     const subMal = filas.filter(f => f.subpartida && f.subpartida.indexOf(f.partida) !== 0);
     if (subMal.length) aviso(`${subMal.length} asientos con una subpartida que no es de su partida (en rojo en Caja).`);
     const socioMal = filas.filter(f => f.idSocio && !idsDeCelda(f.idSocio));
@@ -204,7 +207,8 @@ function pruebasTesoreria() {
 
   const filaCaja = o => Object.assign({ fila: 0, id: '', fecha: null, partida: '', subpartida: '', idSocio: '',
     cantidad: null, factura: '', metodo: '', fechaPago: null, saldoExtracto: null, bdSocios: '', huella: '',
-    descripcion: '', proveedor: '' }, o, { fechaEfectiva: o.fechaPago || o.fecha, esEfectivo: o.metodo === CAJA.EFECTIVO });
+    descripcion: '', proveedor: '', cif: '', cuentaAbono: '', titular: '', asunto: '', conceptoBanco: '', pendiente: false }, o,
+    { fechaEfectiva: o.pendiente ? null : (o.fechaPago || o.fecha), esEfectivo: o.metodo === CAJA.EFECTIVO });
   const yaImportado = ext.movimientos[1];
   const plan = planificarImportacion(ext.movimientos.map(m => Object.assign({}, m)), [
     filaCaja({ fila: 4, id: '20260901-01', fecha: D(1, 9, 2026), cantidad: -15.5, metodo: 'Tarjeta' }),
@@ -413,6 +417,127 @@ function pruebasTesoreria() {
   caso('Ejercicio anterior: no va a BD Socios (sin error)', pagosDeseados(filasEA[1], {}, '2026-2027'), { asignaciones: [] });
   const sEA = planificarSincronizacion([filasEA[1]], [Object.assign({}, despues[0], { Referencia: 'TES-b' })], ins, aj, D(18, 10, 2026));
   caso('Ejercicio anterior: deshace lo que la importación había enlazado', sEA.cambiar.map(c => c.cambios.Conciliado), ['No']);
+
+  // --- Desplegables con nombre y menú ---
+  caso('Desplegable: deja solo el código', [codigoDeOpcion('G21 · Convivencia de otoño'), codigoDeOpcion('G21A · Alojamiento (Convivencia)'),
+    codigoDeOpcion('G21'), codigoDeOpcion(CAJA.TRASPASO), codigoDeOpcion('')], ['G21', 'G21A', 'G21', CAJA.TRASPASO, '']);
+  caso('Desplegable de subpartidas: con nombre y luego los códigos', opcionesDeSubpartidas(listaDeSubpartidas([
+    { titulo: 'Convivencia', subpartidas: [{ codigo: 'G21T', descripcion: 'Transporte' }, { codigo: 'G21A', descripcion: 'Alojamiento' }] },
+    { titulo: 'Rastrillo', subpartidas: [{ codigo: 'I31V', descripcion: '' }, { codigo: 'G21A', descripcion: 'Repetida' }] }])),
+    ['G21A · Alojamiento (Convivencia)', 'G21T · Transporte (Convivencia)', 'I31V · (Rastrillo)', 'G21A', 'G21T', 'I31V']);
+  caso('Menú: quita lo que no existe y los separadores sobrantes', limpiarMenu(['-', ['A', 'a'], '-', '-', ['B', 'no'],
+    { sub: 'S', entradas: [['C', 'no']] }, '-', ['D', 'd'], '-'], n => n !== 'no'), [['A', 'a'], '-', ['D', 'd']]);
+  caso('Menú: todas sus funciones existen', limpiarMenu(entradasDelMenu(), n => { try { return typeof eval(n) === 'function'; } catch (e) { return false; } })
+    .length, entradasDelMenu().length);
+
+  // --- Validaciones de la ventana de asientos ---
+  const ibanBueno = 'GB82 WEST 1234 5698 7654 32';   // el ejemplo de la norma ISO 13616
+  caso('IBAN: válido, con espacios o seguido', [ibanValido(ibanBueno), ibanValido(compactar(ibanBueno))], [true, true]);
+  caso('IBAN: una errata', ibanValido('GB82 WEST 1234 5698 7654 33'), false);
+  caso('IBAN: español incompleto', ibanValido('E' + 'S91 2100 0418 4502 0005 133'), false);
+  caso('IBAN: formato', formatoIban('gb82west12345698765432'), 'GB82 WEST 1234 5698 7654 32');
+  caso('CIF/NIF', ['12345678Z', '12345678A', 'X1234567L', 'B12345674', 'B12345675', 'Q1234567D', 'Q12345674', 'FR123456']
+    .map(documentoFiscalValido), [true, false, true, true, false, true, false, null]);
+  caso('Texto para el banco', textoParaBanco('  Cañas y albóndigas: 1ª cena € '), 'Canas y albondigas: 1 cena');
+  caso('Asunto: empieza por el ID', asuntoDeTransferencia('20261015-01', 'Material convivencia'), '20261015-01 Material convivencia');
+  caso('Asunto: sin el ID dos veces', asuntoDeTransferencia('20261015-01', '20261015-01 Material'), '20261015-01 Material');
+  caso('Asunto: como mucho 140', asuntoDeTransferencia('20261015-01', 'x'.repeat(300)).length, ASIENTOS.ASUNTO_MAX);
+  caso('ID de asiento en el concepto', [
+    idsDeAsientoEnConcepto('Transferencia A Favor De Papeleria Central Sl, Concepto 20261015-01 Material'),
+    idsDeAsientoEnConcepto('Transf. A Favor De X Concepto 2026101502'),
+    idsDeAsientoEnConcepto('Pago Con Tarjeta El 05/09/2026 Ref 123456789012'),
+    idsDeAsientoEnConcepto('Concepto 20261399-01')], [['20261015-01'], ['20261015-02'], [], []]);
+  caso('Método: transferencia que dice «compra»', metodoDeConcepto('Transferencia A Favor De X, Concepto 20261015-01 Compra De Material', -20),
+    'Transferencia');
+
+  // --- Transferencias pendientes ---
+  const fp = filaDeCaja((() => {
+    const v = new Array(CAJA.COLUMNAS.length).fill('');
+    v[colCaja('ID Transacción') - 1] = '20261015-01'; v[colCaja('Fecha') - 1] = D(15, 10, 2026);
+    v[colCaja('Cantidad') - 1] = -125.4; v[colCaja('Fecha de pago') - 1] = CAJA.PENDIENTE;
+    v[colCaja('Método de pago') - 1] = 'Transferencia';
+    return v;
+  })(), 9);
+  caso('Pendiente: se lee de la hoja', [fp.pendiente, fp.fechaEfectiva, fp.fechaPago], [true, null, null]);
+  const conPendientes = [
+    filaCaja({ fila: 4, id: '20261001-01', fecha: D(1, 10, 2026), cantidad: 20, partida: 'I11', metodo: 'Transferencia', saldoExtracto: 1020, huella: 'h1' }),
+    filaCaja({ fila: 5, id: '20261015-01', fecha: D(15, 10, 2026), cantidad: -125.4, partida: 'G21', metodo: 'Transferencia', pendiente: true }),
+    filaCaja({ fila: 6, id: '20261016-01', fecha: D(16, 10, 2026), cantidad: -80, partida: 'G12', metodo: 'Transferencia', pendiente: true })
+  ];
+  caso('Pendiente: no mueve el saldo ni descuadra', [saldosALaFecha(conPendientes, { banco: 1000, efectivo: 0 }, D(31, 8, 2027)).banco,
+    descuadresDeSaldo(conPendientes, { banco: 1000, efectivo: 0 }).length], [1020, 0]);
+  caso('Pendiente: no sale en el informe a fecha', calcularInforme(conPendientes, partidas, { banco: 1000, efectivo: 0 }, D(31, 8, 2027))
+    .movimientos.map(m => m.id), ['20261001-01']);
+  const planP = planificarImportacion([
+    { fecha: D(30, 10, 2026), importe: -125.4, saldo: 894.6, concepto: 'Transferencia A Favor De Papeleria Central Sl, Concepto 20261015-01 Material' },
+    { fecha: D(2, 11, 2026), importe: -80, saldo: 814.6, concepto: 'Pago Con Tarjeta En Libreria Del Centro' },
+    { fecha: D(20, 11, 2026), importe: -80, saldo: 734.6, concepto: 'Transferencia A Favor De Imprenta Sol, Concepto Carteles' }
+  ], conPendientes, D(1, 9, 2026), D(31, 8, 2027));
+  caso('Pendiente: se reconoce por el ID del concepto, aunque sea semanas después',
+    planP.fusiones.map(x => [x.id, x.pendiente, fechaCompacta(x.m.fecha)]), [['20261015-01', true, '20261030'], ['20261016-01', true, '20261120']]);
+  caso('Pendiente: un pago con tarjeta del mismo importe no es la transferencia', planP.nuevos.map(m => m.importe), [-80]);
+  const planOtro = planificarImportacion([{ fecha: D(30, 10, 2026), importe: -125, saldo: 895,
+    concepto: 'Transferencia A Favor De Papeleria Central Sl, Concepto 20261015-01 Material' }], conPendientes, D(1, 9, 2026), D(31, 8, 2027));
+  caso('Pendiente: el ID con otro importe no se fusiona y avisa', [planOtro.fusiones.length, /20261015-01/.test(planOtro.nuevos[0].aviso || '')], [0, true]);
+
+  // --- Qué listas de la ventana ---
+  caso('Ventana: qué falta en cada asiento', [
+    filaCaja({ cantidad: -12, metodo: 'Tarjeta', huella: 'h' }),
+    filaCaja({ cantidad: -12, metodo: 'Tarjeta', partida: 'G12', huella: 'h' }),
+    filaCaja({ cantidad: -12, metodo: 'Tarjeta', partida: 'G12', factura: 'x' }),
+    filaCaja({ cantidad: -3, metodo: 'Cargo bancario', huella: 'h' }),
+    filaCaja({ cantidad: -50, metodo: 'Retirada en cajero', partida: CAJA.TRASPASO }),
+    filaCaja({ cantidad: -80, metodo: 'Transferencia', partida: 'G12', pendiente: true }),
+    filaCaja({ cantidad: -5, metodo: CAJA.EFECTIVO, partida: 'G12' }),
+    filaCaja({ cantidad: 20, metodo: 'Transferencia' })
+  ].map(f => { const c = clasificarAsiento(f); return [c.completar, c.factura, c.pendiente].map(Number).join(''); }),
+    ['110', '010', '000', '100', '000', '011', '010', '000']);
+  const ctxV = ctxDeValidacion(conPendientes, { ingresos: [{ codigo: 'I11', descripcion: 'Cuotas' }],
+    gastos: [{ codigo: 'G21', descripcion: 'Actividades' }, { codigo: 'G12', descripcion: 'Material' }] },
+    [{ codigo: 'G21T', descripcion: 'Transporte', actividad: 'Convivencia' }],
+    { inicio: D(1, 9, 2026), fin: new Date(2027, 7, 31, 23, 59, 59), curso: '2026-2027' }, { banco: 1000, efectivo: 10 });
+  const ventana = contextoDeVentana(conPendientes, { ingresos: [], gastos: [] }, [], { ejercicio: '2026-2027', inicio: D(1, 9, 2026),
+    fin: D(31, 8, 2027), curso: '2026-2027' }, { banco: 1000, efectivo: 0 }, D(25, 11, 2026), {});
+  caso('Ventana: sin fechas como objeto (google.script.run no las pasa)', /\d{4}-\d{2}-\d{2}T/.test(JSON.stringify(ventana)), false);
+  caso('Ventana: las dos transferencias pendientes', ventana.asientos.filter(a => a.pendiente).map(a => a.id), ['20261015-01', '20261016-01']);
+
+  const tr = { fecha: '2026-11-25', importe: '125,40', proveedor: 'Papelería Central SL', cif: 'B12345674', cuentaAbono: ibanBueno,
+    partida: 'G21 · Actividades', subpartida: 'G21T', descripcion: 'Material de la convivencia', asunto: '' };
+  const pt = planDeTransferencia(tr, ctxV);
+  caso('Transferencia: se apunta pendiente, en negativo, con titular y cuenta', [pt.errores, pt.valores['Cantidad'], pt.valores['Fecha de pago'],
+    pt.valores['Titular'], pt.valores['Cuenta de abono'], pt.valores['Partida'], pt.textoAsunto],
+    [[], -125.4, CAJA.PENDIENTE, 'Papelería Central SL', 'GB82 WEST 1234 5698 7654 32', 'G21', 'Material de la convivencia']);
+  caso('Transferencia: lo que falta o está mal', planDeTransferencia(Object.assign({}, tr, { cuentaAbono: 'GB82 WEST 1234', partida: '',
+    subpartida: 'G21T', proveedor: '', fecha: '2027-09-02' }), ctxV).errores.length, 5);
+  caso('Transferencia: subpartida de otra partida', planDeTransferencia(Object.assign({}, tr, { partida: 'G12' }), ctxV).errores,
+    ['La subpartida G21T no es de la partida G12.']);
+  caso('Transferencia: CIF dudoso solo avisa', [planDeTransferencia(Object.assign({}, tr, { cif: 'B12345675' }), ctxV).errores.length,
+    planDeTransferencia(Object.assign({}, tr, { cif: 'B12345675' }), ctxV).avisos.length], [0, 1]);
+
+  const ctxSocios = Object.assign({}, ctxV, { sociosEnCaja: { 'JMV-000002': ['20260910-01'] } });
+  const pe = planDeEfectivo({ tipo: 'cuotas', fecha: '2026-10-07', cuotas: [
+    { idSocio: 'jmv-000001', importe: '20', partida: 'I11' }, { idSocio: 'JMV-000002', importe: 30, partida: 'I99' }] }, ctxSocios);
+  caso('Efectivo: una fila por cuota, con su socio', pe.filas.map(v => [v['ID socio'], v['Cantidad'], v['Partida'], v['Método de pago']]),
+    [['JMV-000001', 20, 'I11', CAJA.EFECTIVO], ['JMV-000002', 30, '', CAJA.EFECTIVO]]);
+  caso('Efectivo: avisa de partida desconocida y de socio ya en Caja', pe.avisos.length, 2);
+  caso('Efectivo: socio repetido', planDeEfectivo({ tipo: 'cuotas', fecha: '2026-10-07', cuotas: [
+    { idSocio: 'JMV-000001', importe: 20 }, { idSocio: 'JMV-000001', importe: 20 }] }, ctxV).errores, ['JMV-000001 está dos veces.']);
+  const pg = planDeEfectivo({ tipo: 'gasto', fecha: '2026-10-07', importe: '12,5', partida: 'G12', descripcion: 'Cinta' }, ctxV);
+  caso('Efectivo: gasto en negativo y aviso si la caja se queda en negativo', [pg.errores, pg.filas[0]['Cantidad'], pg.avisos.length], [[], -12.5, 1]);
+
+  // --- Cambios en un asiento que ya existe ---
+  const tarjeta = filaCaja({ fila: 7, id: '20261102-01', fecha: D(2, 11, 2026), cantidad: -80, metodo: 'Tarjeta', huella: 'h',
+    partida: 'G21', subpartida: 'G21T' });
+  const pc = planDeCambios(tarjeta, { partida: { antes: 'G21', despues: 'G12 · Material' }, descripcion: { antes: '', despues: ' Libros ' } }, ctxV);
+  caso('Cambios: partida nueva quita la subpartida de la otra', [pc.errores, pc.escribir], [[],
+    { 'Partida': 'G12', 'Descripción': 'Libros', 'Subpartida': '' }]);
+  caso('Cambios: lo del banco no se toca', planDeCambios(tarjeta, { importe: { antes: -80, despues: '70' } }, ctxV).errores.length, 1);
+  caso('Cambios: si la hoja ha cambiado, no se guarda', planDeCambios(tarjeta, { descripcion: { antes: 'Otra cosa', despues: 'x' } }, ctxV).conflictos,
+    ['Descripción']);
+  const pend = conPendientes[1];
+  caso('Cambios: en una pendiente, importe y asunto', planDeCambios(pend, { importe: { antes: -125.4, despues: '130' },
+    asunto: { antes: '', despues: 'Material ñandú' } }, ctxV).escribir, { 'Cantidad': -130, 'Asunto transferencia': '20261015-01 Material nandu' });
+  caso('Cambios: una pendiente no se queda sin IBAN', planDeCambios(pend, { cuentaAbono: { antes: '', despues: '' } }, ctxV).errores.length, 1);
 
   const fallos = casos.filter(c => JSON.stringify(c.obtenido) !== JSON.stringify(c.esperado))
     .map(c => `${c.nombre}: esperaba ${JSON.stringify(c.esperado)}, sale ${JSON.stringify(c.obtenido)}`);

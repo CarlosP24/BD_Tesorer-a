@@ -16,15 +16,17 @@ código no coincide, **manda el código**.
 
 | Archivo | Qué hace |
 |---|---|
-| `00_Estructura.js` | Constantes (`HOJAS`, `CAJA`, `PRESUPUESTO`, `AJUSTES`), creación y reparación de hojas, fórmulas, validaciones, formato condicional, protecciones, `leerAjustes()`, `leerPartidas()`, utilidades, `onOpen()`, `onEdit()` |
-| `01_Caja.js` | `leerCaja()` / `filaDeCaja()`, ID de transacción, orden, dividir asiento, facturas, diálogo de subida (`recibirArchivo()`) |
+| `00_Estructura.js` | Constantes (`HOJAS`, `CAJA`, `PRESUPUESTO`, `AJUSTES`), creación y reparación de hojas, fórmulas, validaciones, formato condicional, protecciones, `leerAjustes()`, `leerPartidas()`, utilidades, menú (`entradasDelMenu()`), `onOpen()`, `onEdit()` |
+| `01_Caja.js` | `leerCaja()` / `filaDeCaja()`, ID de transacción, orden, `codigoDeOpcion()`, dividir asiento, traspasos, facturas, diálogo de subida (`recibirArchivo()`) |
 | `02_Extractos.js` | Importación del Excel del banco: `leerExtracto()` y `planificarImportacion()` (puras), `importarExtracto()` |
 | `03_Socios.js` | `identificarSocio()` y `planificarSincronizacion()` (puras), `sincronizarConBdSocios()`, caché de pagos de BD Socios |
 | `04_Actividades.js` | Hojas de actividad y lista de subpartidas |
 | `05_Informes.js` | `calcularInforme()` / `calcularInformeActividad()` (puras) y PDF |
 | `06_Ejercicios.js` | Crear el ejercicio siguiente, traer saldos iniciales |
 | `07_Diagnostico.js` | `diagnostico()` y `pruebasTesoreria()` (casos con datos inventados) |
-| `Subir.html`, `Actividad.html`, `Informes.html`, `Traspaso.html` | Diálogos |
+| `08_Asientos.js` | Servidor de la ventana de asientos: `datosDeAsientos()`, `guardarTransferencia()`, `guardarEfectivo()`, `guardarCambiosDeAsiento()`; lógica pura (`planDeTransferencia()`, `planDeEfectivo()`, `planDeCambios()`, `clasificarAsiento()`, `ibanValido()`, `documentoFiscalValido()`, `asuntoDeTransferencia()`) |
+| `Asientos.html` | La ventana de asientos (traspaso, transferencias, pendientes, por completar, facturas, efectivo) |
+| `Subir.html`, `Actividad.html`, `Informes.html` | Diálogos |
 | `Informe.html` | Plantilla del PDF (scriptlets de HtmlService) |
 | `Config.js` | **No está en git** (§6). `Config.ejemplo.js` es su plantilla |
 | `pruebas/ejecutar.js` | Ejecuta `pruebasTesoreria()` en Node |
@@ -49,9 +51,11 @@ los cursos). Hojas:
 Columnas de Caja, **en este orden** (`CAJA.COLUMNAS`): ID Transacción, Fecha,
 Concepto Banco, Descripción, Partida, Subpartida, ID socio, Proveedor, CIF
 proveedor, Cantidad, Saldo, Factura, Método de pago, Cuenta de abono, Titular,
-Fecha de pago, y las técnicas Saldo extracto, BD Socios, Huella extracto
-(oculta). Las fórmulas de Cuentas, de las actividades y del saldo se refieren a
-ellas por letra: **no se insertan ni se mueven columnas en Caja.**
+Fecha de pago, las técnicas Saldo extracto, BD Socios, Huella extracto
+(oculta), y Asunto transferencia (añadida al final para no mover nada). Las
+fórmulas de Cuentas, de las actividades y del saldo se refieren a ellas por
+letra: **no se insertan ni se mueven columnas en Caja**; si hace falta una
+nueva, va al final de `CAJA.COLUMNAS` y se crea con «Reparar».
 
 ### Decisiones que no hay que deshacer
 
@@ -89,6 +93,29 @@ ellas por letra: **no se insertan ni se mueven columnas en Caja.**
   se le resta lo marcado así que aún no ha llegado (`descuadresDeSaldo()` y
   el formato condicional de «Saldo extracto»); por eso hay que pasarle
   siempre TODAS las filas.
+- **Transferencias pendientes: Fecha de pago = «Pendiente»** (`CAJA.PENDIENTE`).
+  Un gasto por transferencia se apunta desde la ventana ANTES de ordenarlo en
+  el banco, con un asunto que empieza por su ID. Decisión de tesorería:
+  mientras está pendiente **cuenta en Cuentas y en las actividades** (gasto
+  comprometido) pero **no en el saldo** (K3, B2, C2 lo excluyen) **ni en los
+  informes a fecha** ni en `saldosALaFecha()`: `filaDeCaja()` le da
+  `pendiente = true` y `fechaEfectiva = null`. El importador la reconoce por
+  el ID en el concepto (`idsDeAsientoEnConcepto()`; con otro importe, no se
+  fusiona y avisa) o, si el banco lo cortara, por importe, siendo
+  transferencia y hasta `DIAS_PENDIENTE` días después; entonces le pone la
+  fecha del banco. `onEdit` no toca «Pendiente» (no está vacía).
+- **Desplegables con nombre.** La lista de Partida y Subpartida (`_Listas`)
+  ofrece primero «G21 · Convivencia» y, al final, los códigos solos; al
+  elegir, `onEdit` deja solo el código (`codigoDeOpcion()`). Los códigos
+  tienen que seguir en la lista: si no, la celda con «G21» sería no válida
+  (Sheets no deja que una opción muestre una cosa y guarde otra). Lo eligió
+  tesorería frente a guardar el nombre en la celda.
+- **La ventana de asientos solo escribe valores** y hace una llamada al
+  abrirse (como BD Socios §3.10). Todo lo que guarda pasa por el lock del
+  script (`conLockDeCaja()`) y, al cambiar un asiento existente, comprueba
+  que lo que se cambia sigue valiendo lo que la ventana vio (`planDeCambios()`).
+  Lo que viene del banco (fecha, importe, concepto, método) no se edita desde
+  ella, salvo en una transferencia pendiente.
 - **El saldo es una sola fórmula en K3** (`={"Saldo"; ARRAYFORMULA(LET(…SCAN…))}`),
   con dos acumulados. **Nunca escribas en la columna Saldo**, ni vacío:
   rompe la fórmula con #REF!. `escribirFilasCaja()` se la salta. Por lo mismo,
@@ -195,6 +222,13 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
   horario (`instalarSincronizacionAutomatica()`).
 - **Activar una hoja oculta la muestra** (`ordenarHojas()` no toca `_Listas`).
 - **Bytes con signo**: en Apps Script `0xD0` es `-48` (`filasDeArchivo()`).
+- **Nada de `//` en el script de `Asientos.html`** (ni comentarios ni
+  direcciones): al servir la plantilla, Apps Script lo toma por comentario y
+  corta la línea (BD Socios §3.9). Comentarios con `/* */`.
+- **`google.script.run` no devuelve `Date`**: lo que va a la ventana lleva
+  las fechas como «aaaa-mm-dd» (`isoDeFecha()`; lo comprueba una prueba).
+- **El menú** se compone en `entradasDelMenu()`; una prueba comprueba que
+  todas sus funciones existen.
 - **El PDF**: mismas reglas que BD Socios §4 (tablas, mm, nada de flex). El
   logo va con `<?!= ?>`: con `<?= ?>` el escapado puede filtrar la URI `data:`.
 
@@ -236,3 +270,11 @@ Lo primero que conviene mirar en la primera ejecución: que el orden de Caja
 conserve el del banco dentro del mismo día (la fila en rojo de «Saldo
 extracto» lo delataría), la conversión del `.xls` vía
 `Drive.Files.create`, y el aspecto del PDF con el conversor de Google.
+
+La ventana de asientos se ha probado en Chrome con `google.script.run`
+simulado. En Sheets falta ver: que al elegir «G21 · …» en el desplegable la
+celda quede en «G21» sin marca de no válida; que la validación de Fecha de
+pago (fórmula, para admitir «Pendiente») deje escribir fechas con normalidad;
+que los botones «Copiar» funcionen dentro del diálogo (si el navegador
+bloquea el portapapeles, usan `execCommand('copy')`); y el concepto real que
+pone el Santander a una transferencia emitida (que conserve el ID).

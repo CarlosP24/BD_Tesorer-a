@@ -112,7 +112,8 @@ function prepararIdentificacion(aj) {
       familia: String(s.ID_FAMILIA || '').trim(),
       tutores: fam ? [fam.Tutor1_nombre, fam.Tutor2_nombre].filter(Boolean).map(String) : [],
       tramo: String(ins.Tramo_cuota || '').trim(),
-      cuota: numeroDeTexto(ins.Importe_cuota)
+      cuota: numeroDeTexto(ins.Importe_cuota),
+      pagada: String(ins.Cuota_pagada || '').trim()   // solo para la ventana de efectivo
     });
   });
   return { candidatos: candidatos, curso: aj.curso, tramos: aj.tramos, titular: config('TITULAR_CUENTA') };

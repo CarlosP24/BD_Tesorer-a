@@ -104,7 +104,39 @@ extractos que se solapen: lo ya importado no se repite. Al terminar:
   duplicarse;
 - si el saldo calculado no coincide con el del banco, la fila sale en rojo.
 
-### Apuntar a mano
+### La ventana de asientos
+
+Casi todo se apunta desde una ventana con las secciones a la izquierda. Cada
+opción del menú la abre en la suya:
+
+- **⇄ Traspaso entre banco y efectivo…** (arriba del todo en el menú): ver
+  «Efectivo y traspasos».
+- **Nuevo gasto por transferencia…**: apúntalo **antes** de pagarlo, con
+  importe, proveedor, CIF, IBAN de destino, partida, subpartida, descripción y,
+  si ya la tienes, la factura. Al guardar, la ventana te da lo que hay que
+  copiar en la app del banco (beneficiario, IBAN, importe y concepto, con
+  botones «Copiar»). El concepto empieza siempre por el ID del asiento: no lo
+  quites. Hasta que sale del banco, el asiento queda con Fecha de pago
+  **«Pendiente»** (en azul en Caja): cuenta en el presupuesto, pero no en el
+  saldo. Cuando importes el extracto que la trae, se reconoce sola y toma la
+  fecha del banco. Las que aún no han salido están en **Transferencias
+  pendientes**, donde se pueden corregir o anular.
+- **Completar movimientos del banco (tarjeta…)…**: los gastos que llegan con
+  el extracto sin partida, sobre todo pagos con tarjeta. Para cada uno, pon
+  partida, descripción, proveedor y la factura; al guardar pasa al siguiente.
+- **Facturas que faltan…**: todos los gastos sin factura (salvo traspasos y
+  comisiones del banco), para subirla.
+- **Ingreso o gasto en efectivo…**: cuotas cobradas en mano (buscas al socio
+  por su nombre; se apunta una fila por socio y se sincroniza con BD Socios),
+  otros ingresos y, si alguna vez hay, gastos en efectivo.
+
+En todas, la partida se busca por código o por nombre («conviv» encuentra
+«G23 · Convivencia de otoño»).
+
+### Apuntar a mano en la hoja
+
+En los desplegables de **Partida** y **Subpartida** puedes escribir el código
+o parte del nombre: al elegir, en la celda queda solo el código.
 
 Escribe la **Fecha** y el ID se pone solo; la **Fecha de pago** se iguala a
 la Fecha si la dejas vacía (cámbiala si el pago fue otro día). Cantidad
@@ -114,11 +146,12 @@ cuenta en el saldo de efectivo; todo lo demás, en el del banco.
 ### Efectivo y traspasos
 
 - **Cuota cobrada en mano**: una fila de Efectivo el día que se cobra, con su
-  **ID socio** (la partida se pone sola al sincronizar).
+  **ID socio**. **Tesorería → Ingreso o gasto en efectivo… → Cuotas cobradas
+  en mano** lo hace por ti.
 - **Ingresar en el banco el efectivo** o **sacar dinero del cajero** es un
   **traspaso**: no es ingreso ni gasto, solo cambia el dinero de sitio. Son
   dos filas con la partida **Traspaso** e importes contrarios, una en el banco
-  y otra en efectivo. **Caja → Apuntar traspaso entre banco y efectivo…** las
+  y otra en efectivo. **Tesorería → ⇄ Traspaso entre banco y efectivo…** las
   crea las dos.
 - Al importar el extracto, **las retiradas de cajero** se marcan solas como
   traspaso y se crea la fila de efectivo.
@@ -131,7 +164,7 @@ cuenta en el saldo de efectivo; todo lo demás, en el del banco.
   seleccionado en traspaso** o **Caja → El asiento seleccionado no es un
   traspaso** (borra su fila de efectivo y busca al socio).
 
-Colores en Caja: amarillo = falta algo (partida, factura); naranja = míralo
+Colores en Caja: azul = transferencia pendiente; amarillo = falta algo (partida, factura); naranja = míralo
 (fuera de orden, signo raro para la partida, algo pendiente con BD Socios);
 rojo = está mal (saldo distinto del banco, subpartida de otra partida, ID de
 socio mal escrito).
@@ -160,7 +193,9 @@ distintos, **Caja → Dividir el asiento seleccionado**.
 
 ### Facturas
 
-**Caja → Adjuntar factura al asiento seleccionado…** la guarda en la carpeta
+Lo normal es subirlas desde la ventana (**Facturas que faltan…**, o al
+apuntar el gasto). También **Caja → Adjuntar factura al asiento
+seleccionado…**. Las dos la guardan en la carpeta
 de facturas del ejercicio con el ID del asiento como nombre. Si las subes
 directamente a la carpeta con ese nombre, **Caja → Vincular facturas subidas
 a la carpeta** las enlaza.

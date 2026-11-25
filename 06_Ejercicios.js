@@ -33,6 +33,7 @@ function crearEjercicioSiguiente() {
   const filas = leerCaja(ss);
   const saldos = saldosALaFecha(filas, saldosIniciales(ss), aj.fin);
   const despues = filas.filter(f => f.fechaEfectiva && f.fechaEfectiva > aj.fin);
+  const pendientes = filas.filter(f => f.pendiente);
   const r = ui.alert('Crear el ejercicio siguiente',
     `Se creará «${nombre}» (${anio}-${anio + 1}) en la carpeta ${carpeta.getName()}, con:\n\n`
     + `• Saldo inicial del banco: ${euros(saldos.banco)}\n`
@@ -40,6 +41,8 @@ function crearEjercicioSiguiente() {
     + '• Las mismas partidas del presupuesto, sin importes.\n\n'
     + (despues.length ? `⚠ Hay ${despues.length} asientos con fecha de pago posterior al ${fechaCorta(aj.fin)} `
       + `(${despues.slice(0, 5).map(f => f.id).join(', ')}…): no cuentan en estos saldos y habría que pasarlos al nuevo.\n\n` : '')
+    + (pendientes.length ? `⚠ Hay ${pendientes.length} transferencias pendientes (${pendientes.slice(0, 5).map(f => f.id).join(', ')}): `
+      + 'no están en estos saldos. Si salen del banco ya en el ejercicio nuevo, apúntalas allí.\n\n' : '')
     + 'Si después se añaden asientos a este ejercicio, en el nuevo se puede usar '
     + '«Traer los saldos iniciales del ejercicio anterior». ¿Sigo?',
     ui.ButtonSet.YES_NO);

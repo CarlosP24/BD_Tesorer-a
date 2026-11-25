@@ -83,7 +83,7 @@ function esHojaDeActividad(h) {
 
 /** [{ hoja, nombre, tipo, titulo, ingresos, gastos, subpartidas: [{ codigo, descripcion, presupuesto }] }] */
 function hojasDeActividad(ss) {
-  return (ss || SpreadsheetApp.getActiveSpreadsheet()).getSheets().filter(esHojaDeActividad).map(h => {
+  return (ss || libro()).getSheets().filter(esHojaDeActividad).map(h => {
     const meta = h.getDeveloperMetadata().find(m => m.getKey() === ACT.META);
     const cab = h.getRange('B1:B3').getValues();
     const subs = h.getRange(ACT.PRIMERA_SUB, 1, ACT.FILAS_SUB, 3).getValues()
@@ -125,7 +125,7 @@ function abrirDialogoDeActividad(tipo) {
  * título como descripción y sin importe.
  */
 function crearHojaDeActividad(datos) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const tipo = ACT.TIPOS[datos.tipo] ? datos.tipo : 'actividad';
   const T = ACT.TIPOS[tipo];
   const titulo = String(datos.titulo || '').replace(/[\[\]*?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -246,8 +246,8 @@ function montarHojaDeActividad(h, titulo, ing, gas, subpartidas, etiqueta) {
 }
 
 /**
- * Todo protegido salvo el título, las subpartidas y las columnas libres.
- * Estricta: el script no vuelve a escribir en esta hoja después de crearla.
+ * Todo protegido (con aviso) salvo el título, las subpartidas y las
+ * columnas libres.
  */
 function protegerHojaDeActividad(h) {
   const p = h.protect().setDescription(PROTECCION + 'hoja de actividad (lo copiado de Caja y Presupuesto)');
@@ -256,11 +256,9 @@ function protegerHojaDeActividad(h) {
     h.getRange(ACT.PRIMERA_SUB, 1, ACT.FILAS_SUB, 3),
     h.getRange(1, ACT.PRIMERA_COLUMNA_LIBRE, h.getMaxRows(), h.getMaxColumns() - ACT.PRIMERA_COLUMNA_LIBRE + 1)
   ]);
-  const yo = Session.getEffectiveUser();
-  p.addEditor(yo);
-  const otros = p.getEditors().filter(e => e.getEmail() !== yo.getEmail());
-  if (otros.length) p.removeEditors(otros);
-  if (p.canDomainEdit()) p.setDomainEdit(false);
+  // De aviso, no estricta: otra persona de tesorería tiene que poder
+  // trabajar con la hoja (ver «PROTECCIONES» en 00_Estructura.js).
+  p.setWarningOnly(true);
 }
 
 
@@ -284,7 +282,7 @@ function alEditarActividad(e) {
  * CAJA.SEPARADOR_OPCION).
  */
 function actualizarListaSubpartidas(ss) {
-  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  ss = ss || libro();
   const listas = ss.getSheetByName(HOJAS.LISTAS);
   if (!listas) return [];
   const subs = listaDeSubpartidas(hojasDeActividad(ss));
@@ -317,7 +315,7 @@ function opcionesDeSubpartidas(subs) {
 }
 
 function actualizarListaSubpartidasAhora() {
-  const c = actualizarListaSubpartidas(SpreadsheetApp.getActiveSpreadsheet());
-  SpreadsheetApp.getActiveSpreadsheet().toast(
+  const c = actualizarListaSubpartidas(libro());
+  libro().toast(
     c.length ? `${c.length} subpartidas: ${c.join(', ')}` : 'No hay subpartidas definidas.', 'Subpartidas', 6);
 }

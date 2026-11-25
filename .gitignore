@@ -26,3 +26,8 @@ node_modules/
 # Guía de uso construida en local (mkdocs build / serve)
 site/
 .venv/
+
+# Lista de scripts a los que se despliega (IDs de los libros de cada centro).
+despliegue/proyectos.txt
+# Otras configuraciones de clasp (la del libro antiguo, las de pruebas).
+.clasp.*.json

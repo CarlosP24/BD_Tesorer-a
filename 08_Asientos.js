@@ -46,7 +46,7 @@ const ASIENTOS = {
   // filaDeCaja() → columna). Lo que viene del banco (fecha, importe,
   // concepto, método) no se toca desde aquí.
   EDITABLES: { descripcion: 'Descripción', partida: 'Partida', subpartida: 'Subpartida',
-               proveedor: 'Proveedor', cif: 'CIF proveedor' },
+               proveedor: 'Proveedor', cif: 'CIF proveedor', sinFactura: 'Factura' },
   // Y además, en una transferencia pendiente, que aún no ha llegado al banco:
   EDITABLES_PENDIENTE: { fecha: 'Fecha', importe: 'Cantidad', cuentaAbono: 'Cuenta de abono',
                          titular: 'Titular', asunto: 'Asunto transferencia' }
@@ -61,6 +61,7 @@ function abrirNuevaTransferencia() { abrirAsientos('transferencia'); }
 function abrirMovimientosPorCompletar() { abrirAsientos('completar'); }
 function abrirFacturasQueFaltan() { abrirAsientos('facturas'); }
 function abrirEfectivo() { abrirAsientos('efectivo'); }
+function abrirTransferenciasPendientes() { abrirAsientos('pendientes'); }
 
 /**
  * Abre la ventana en una sección. Si hay una fila de Caja seleccionada y
@@ -85,7 +86,8 @@ function abrirAsientos(seccion) {
 
 /** Todo lo que la ventana necesita, de una vez. Solo datos simples (sin Date). */
 function datosDeAsientos() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
+  registrarPrograma(ss);
   const aj = leerAjustes(ss);
   return contextoDeVentana(leerCaja(ss), leerPartidas(ss), listaDeSubpartidas(hojasDeActividad(ss)),
     aj, saldosIniciales(ss), new Date(),
@@ -113,11 +115,12 @@ function sociosParaEfectivo() {
 /**
  * Un gasto nuevo por transferencia, pendiente de ordenar en el banco.
  * datos: { fecha, importe, proveedor, cif, cuentaAbono, titular, partida,
- * subpartida, descripcion, asunto, archivo? }. archivo: { nombre, tipo, base64 }.
+ * subpartida, descripcion, asunto, sinFactura?, archivo? }. archivo: { nombre, tipo, base64 }.
+ * sinFactura: textoSinFactura() si el gasto no lleva factura (entonces no se sube archivo).
  */
 function guardarTransferencia(datos) {
   return conLockDeCaja(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = libro();
     const h = ss.getSheetByName(HOJAS.CAJA);
     const filas = leerCaja(ss);
     const ctx = contextoDeValidacion(ss, filas);
@@ -132,7 +135,7 @@ function guardarTransferencia(datos) {
     registrar('INFO', `Transferencia pendiente apuntada: ${id}`,
       `${euros(plan.valores['Cantidad'])} a ${plan.valores['Proveedor']} · ${plan.valores['Partida']}`);
 
-    const lineas = plan.avisos.map(x => '⚠ ' + x).concat(facturaDeVentana(datos.archivo, id));
+    const lineas = plan.avisos.map(x => '⚠ ' + x).concat(plan.valores['Factura'] ? [] : facturaDeVentana(datos.archivo, id));
     return { asiento: asientoParaVentana(releerFila(h, id)), lineas: lineas };
   });
 }
@@ -141,11 +144,11 @@ function guardarTransferencia(datos) {
  * Ingreso o gasto en efectivo. datos.tipo:
  *   'cuotas'  { fecha, cuotas: [{ idSocio, importe, partida }] } → una fila por socio
  *   'ingreso' { fecha, importe, partida, subpartida, descripcion }
- *   'gasto'   { fecha, importe, partida, subpartida, descripcion, proveedor, cif, archivo? }
+ *   'gasto'   { fecha, importe, partida, subpartida, descripcion, proveedor, cif, sinFactura?, archivo? }
  */
 function guardarEfectivo(datos) {
   return conLockDeCaja(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = libro();
     const h = ss.getSheetByName(HOJAS.CAJA);
     const filas = leerCaja(ss);
     const ctx = contextoDeValidacion(ss, filas);
@@ -166,7 +169,7 @@ function guardarEfectivo(datos) {
     const lineas = [nuevos.length === 1 ? `Apuntado: ${lista[0]} (${euros(nuevos[0]['Cantidad'])}).`
       : `Apuntados ${nuevos.length} asientos: ${lista.join(', ')}.`];
     plan.avisos.forEach(x => lineas.push('⚠ ' + x));
-    if (datos.tipo === 'gasto') facturaDeVentana(datos.archivo, lista[0]).forEach(l => lineas.push(l));
+    if (datos.tipo === 'gasto' && !nuevos[0]['Factura']) facturaDeVentana(datos.archivo, lista[0]).forEach(l => lineas.push(l));
     if (datos.tipo === 'cuotas' && config('ID_BD_SOCIOS')) {
       try { sincronizarConBdSocios(ss).lineas.forEach(l => lineas.push(l)); }
       catch (e) { lineas.push('⚠ No se ha podido sincronizar con BD Socios: ' + e.message
@@ -185,7 +188,7 @@ function guardarEfectivo(datos) {
  */
 function guardarCambiosDeAsiento(datos) {
   return conLockDeCaja(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = libro();
     const h = ss.getSheetByName(HOJAS.CAJA);
     const filas = leerCaja(ss);
     const f = filas.find(x => x.id === datos.id);
@@ -203,7 +206,7 @@ function guardarCambiosDeAsiento(datos) {
       cambiadas.map(c => `${c}: ${plan.escribir[c] instanceof Date ? fechaCorta(plan.escribir[c]) : plan.escribir[c]}`).join(' · '));
 
     const lineas = (cambiadas.length ? ['Guardado.'] : []).concat(plan.avisos.map(x => '⚠ ' + x),
-      facturaDeVentana(datos.archivo, f.id));
+      plan.escribir['Factura'] ? [] : facturaDeVentana(datos.archivo, f.id));
     if (!lineas.length) lineas.push('No había nada que cambiar.');
     return { asiento: asientoParaVentana(releerFila(h, f.id)), lineas: lineas };
   });
@@ -212,7 +215,7 @@ function guardarCambiosDeAsiento(datos) {
 /** Borra una transferencia pendiente que no se va a hacer. */
 function anularTransferenciaPendiente(id) {
   return conLockDeCaja(() => {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = libro();
     const h = ss.getSheetByName(HOJAS.CAJA);
     const f = leerCaja(ss).find(x => x.id === id);
     if (!f) throw new Error(`El asiento ${id} ya no está en Caja.`);
@@ -231,7 +234,7 @@ function anularTransferenciaPendiente(id) {
 // ==================================================================
 
 function conLockDeCaja(fn) {
-  const lock = LockService.getScriptLock();
+  const lock = bloqueo();
   if (!lock.tryLock(30000)) throw new Error('Hay otra importación o sincronización en marcha. Prueba en un minuto.');
   try { return fn(); }
   finally { lock.releaseLock(); }
@@ -264,7 +267,7 @@ function facturaDeVentana(archivo, id) {
 // LÓGICA (pura)
 // ==================================================================
 
-/** Lo que recibe la ventana. `config`: { facturas, bdSocios } (si están en Config.js). */
+/** Lo que recibe la ventana. `config`: { facturas, bdSocios } (si están configuradas en Ajustes). */
 function contextoDeVentana(filas, partidas, subpartidas, aj, iniciales, hoy, conf) {
   const sociosEnCaja = {};
   filas.forEach(f => (idsDeCelda(f.idSocio) || []).forEach(x => {
@@ -284,8 +287,12 @@ function contextoDeVentana(filas, partidas, subpartidas, aj, iniciales, hoy, con
     asientos: filas.filter(f => { const c = clase(f); return c.pendiente || c.completar || c.factura; }).map(asientoParaVentana),
     traspasosSueltos: emparejarTraspasos(filas).sueltas.map(asientoParaVentana),
     sociosEnCaja: sociosEnCaja,
+    // Para apuntar cuotas en mano sin base de socios: la partida de cada tramo.
+    tramos: Object.keys(aj.tramos || {}).map(t => ({ tramo: t, partida: aj.tramos[t] })),
     asuntoMax: ASIENTOS.ASUNTO_MAX, separador: CAJA.SEPARADOR_OPCION,
     ejercicioAnterior: CAJA.EJERCICIO_ANTERIOR,
+    // Motivos para marcar un gasto que no lleva factura: { valor (lo que va en la celda), motivo }.
+    sinFactura: CAJA.MOTIVOS_SIN_FACTURA.map(m => ({ valor: textoSinFactura(m), motivo: m })),
     config: conf || {}
   };
 }
@@ -311,7 +318,8 @@ function asientoParaVentana(f) {
   return {
     id: f.id, fila: f.fila, fecha: isoDeFecha(f.fecha), fechaPago: isoDeFecha(f.fechaPago), pendiente: c.pendiente,
     concepto: f.conceptoBanco, descripcion: f.descripcion, partida: f.partida, subpartida: f.subpartida,
-    idSocio: f.idSocio, proveedor: f.proveedor, cif: f.cif, cantidad: f.cantidad, factura: f.factura,
+    idSocio: f.idSocio, proveedor: f.proveedor, cif: f.cif, cantidad: f.cantidad,
+    factura: noRequiereFactura(f.factura) ? '' : f.factura, sinFactura: noRequiereFactura(f.factura) ? f.factura : '',
     metodo: f.metodo, cuentaAbono: f.cuentaAbono, titular: f.titular, asunto: f.asunto,
     delBanco: !!f.huella, efectivo: !!f.esEfectivo, completar: c.completar, faltaFactura: c.factura
   };
@@ -321,6 +329,7 @@ function asientoParaVentana(f) {
 function valorParaVentana(f, campo) {
   if (campo === 'fecha') return isoDeFecha(f.fecha);
   if (campo === 'importe') return f.cantidad;
+  if (campo === 'sinFactura') return noRequiereFactura(f.factura) ? f.factura : '';
   return f[campo] === undefined || f[campo] === null ? '' : f[campo];
 }
 
@@ -397,6 +406,12 @@ function normalizarCampo(campo, valor, ctx, extra) {
     }
     case 'asunto':
       return { valor: asuntoDeTransferencia(extra.id, t) };
+    case 'sinFactura': {
+      if (!t) return { valor: '' };
+      if (!noRequiereFactura(t)) return { valor: t, error: `«${t}» no es un motivo para no llevar factura.` };
+      const motivo = CAJA.MOTIVOS_SIN_FACTURA.find(m => normalizarTexto(t) === normalizarTexto(textoSinFactura(m)));
+      return { valor: motivo ? textoSinFactura(motivo) : t.replace(/\s+/g, ' ').slice(0, 250) };
+    }
     case 'fecha': {
       const d = fechaDeTexto(t);
       if (!d) return { valor: null, error: 'Falta la fecha.' };
@@ -433,7 +448,8 @@ function planDeTransferencia(d, ctx) {
     'Subpartida': campo('subpartida', { partida: partida }),
     'Descripción': campo('descripcion'),
     'Método de pago': 'Transferencia',
-    'Fecha de pago': CAJA.PENDIENTE
+    'Fecha de pago': CAJA.PENDIENTE,
+    'Factura': campo('sinFactura')
   };
   if (!v['Proveedor']) r.errores.push('Falta el proveedor (a quién se paga).');
   if (!v['Cuenta de abono']) r.errores.push('Falta el IBAN de destino.');
@@ -458,6 +474,18 @@ function planDeEfectivo(d, ctx) {
     if (!cuotas.length) r.errores.push('Añade al menos un socio.');
     const vistos = {};
     cuotas.forEach(c => {
+      // Sin base de socios: quién ha pagado y la partida de su tramo, sin ID.
+      if (!c.idSocio) {
+        const nombre = normalizarCampo('titular', c.nombre, ctx).valor;
+        const imp = normalizarCampo('importe', c.importe, ctx, { signo: 1 });
+        const partida = normalizarCampo('partida', c.partida, ctx, { signo: 1 });
+        if (!nombre) { r.errores.push('Falta el nombre de quien paga una de las cuotas.'); return; }
+        if (imp.error) { r.errores.push(`${nombre}: ${imp.error.toLowerCase()}`); return; }
+        if (!partida.valor || partida.error) { r.errores.push(`${nombre}: ${partida.error || 'falta la partida (el tramo de cuota).'}`); return; }
+        r.filas.push(Object.assign({}, base, { 'Descripción': 'Cuota ' + ctx.curso, 'Titular': nombre,
+          'Partida': partida.valor, 'Cantidad': imp.valor }));
+        return;
+      }
       const ids = idsDeCelda(c.idSocio);
       if (!ids || ids.length !== 1) { r.errores.push(`«${c.idSocio}» no es un ID de socio (JMV-000000).`); return; }
       const id = ids[0].idSocio;
@@ -485,7 +513,7 @@ function planDeEfectivo(d, ctx) {
       'Cantidad': n('importe', { signo: signo }), 'Partida': partida,
       'Subpartida': n('subpartida', { partida: partida }), 'Descripción': n('descripcion')
     });
-    if (signo < 0) { v['Proveedor'] = n('proveedor'); v['CIF proveedor'] = n('cif'); }
+    if (signo < 0) { v['Proveedor'] = n('proveedor'); v['CIF proveedor'] = n('cif'); v['Factura'] = n('sinFactura'); }
     if (!partida) r.errores.push('Falta la partida.');
     if (partida === CAJA.EJERCICIO_ANTERIOR) r.errores.push(`Un asiento nuevo no puede ser «${CAJA.EJERCICIO_ANTERIOR}».`);
     if (!v['Descripción']) r.errores.push('Falta la descripción.');
@@ -522,6 +550,13 @@ function planDeCambios(f, cambios, ctx) {
     const n = normalizarCampo(c, cambios[c].despues, ctx, { partida: partida, signo: signo, id: f.id });
     if (n.error) { r.errores.push(n.error); return; }
     if (c === 'cuentaAbono' && !n.valor) { r.errores.push('Una transferencia necesita el IBAN de destino.'); return; }
+    // «No requiere» nunca pisa el enlace a una factura de verdad.
+    if (c === 'sinFactura' && n.valor && f.factura && !noRequiereFactura(f.factura)) {
+      r.errores.push(`${f.id} ya tiene su factura: no se marca como «${CAJA.SIN_FACTURA}».`); return;
+    }
+    if (c === 'sinFactura' && n.valor && f.cantidad !== null && f.cantidad > 0) {
+      r.errores.push('Solo los gastos llevan factura: un ingreso no se marca.'); return;
+    }
     if (n.aviso) r.avisos.push(n.aviso);
     if (!mismoValor(c === 'fecha' ? isoDeFecha(n.valor) : n.valor, valorParaVentana(f, c))) r.escribir[permitidos[c]] = n.valor;
   });
@@ -599,4 +634,43 @@ function documentoFiscalValido(t) {
 function isoDeFecha(d) {
   if (!(d instanceof Date) || isNaN(d)) return '';
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+
+// ==================================================================
+// PANEL LATERAL (Panel.html)
+//
+// Se abre a la derecha de la hoja, se queda abierto mientras se trabaja y
+// tiene un botón grande para cada tarea, el traspaso el primero: más a mano
+// que el menú para quien no está acostumbrado a Sheets.
+// ==================================================================
+
+function abrirPanel() {
+  SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutputFromFile('Panel').setTitle('Tesorería'));
+}
+
+/** Lo que enseña el panel. Solo datos simples. */
+function estadoDelPanel() {
+  const ss = libro();
+  if (!ss.getSheetByName(HOJAS.AJUSTES) || !ss.getSheetByName(HOJAS.CAJA)) return { libro: false };
+  registrarPrograma(ss);
+  const aj = leerAjustes(ss);
+  return Object.assign({ libro: true, centro: config('NOMBRE_CENTRO'), ultimoExtracto: aj.ultimoExtracto,
+    bdSocios: !!config('ID_BD_SOCIOS'),
+    reparar: (parseInt(mapaDeAjustes()[AJUSTES.VERSION], 10) || 0) < VERSION_ESTRUCTURA },
+    resumenDelLibro(leerCaja(ss), saldosIniciales(ss), aj));
+}
+
+/** Saldos y cuántos asientos hay en cada lista de la ventana. Pura (la usa también la consola). */
+function resumenDelLibro(filas, iniciales, aj) {
+  const r = { ejercicio: aj.ejercicio, saldos: saldosALaFecha(filas, iniciales, new Date(2999, 0, 1)),
+    pendientes: 0, completar: 0, facturas: 0, sinPartida: 0, asientos: filas.length };
+  filas.forEach(f => {
+    const c = clasificarAsiento(f);
+    if (c.pendiente) r.pendientes++;
+    if (c.completar) r.completar++;
+    if (c.factura) r.facturas++;
+    if (f.cantidad !== null && !f.partida) r.sinPartida++;
+  });
+  return r;
 }

@@ -42,6 +42,14 @@ pagan la cuota en efectivo.
 Se apunta una fila por socio y, en ese mismo momento, sus cuotas quedan como
 pagadas en la base de datos de socios.
 
+!!! info "Si tu centro no tiene base de socios"
+
+    En vez del buscador de socios verás tres casillas: **quién paga**, su
+    **tramo** y el **importe**. Rellénalas y pulsa **Añadir a la lista** por
+    cada persona, y al final **Apuntar las cuotas**. Cada cuota queda en su
+    partida de cuotas, con el nombre en la columna *Titular*. El nombre nunca
+    sale en los informes.
+
 !!! warning "Si un socio sale como «ya en Caja» o «pagada»"
 
     Quiere decir que ya hay un pago suyo apuntado. Antes de añadirlo,

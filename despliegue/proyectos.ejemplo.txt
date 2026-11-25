@@ -1,0 +1,7 @@
+# Lista de programas a los que sube despliegue/desplegar.js.
+# Cópiala de la consola: Tesorería → Consola nacional → Lista de programas para desplegar.
+# Guárdala como despliegue/proyectos.txt (no va a git). Una línea por script: «ID  # quién».
+#
+# IDDelScriptDeLaConsolaVaAqui000000000000000  # Consola nacional
+# IDDelScriptDelLibroPlantillaVaAqui0000000000  # Libro plantilla
+# IDDelScriptDeUnCentroVaAqui00000000000000000  # Centro de ejemplo · 2026-2027

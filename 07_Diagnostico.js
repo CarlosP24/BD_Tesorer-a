@@ -12,8 +12,25 @@
  *******************************************************************/
 
 function diagnostico() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const r = diagnosticoDelLibro(libro(), { pruebas: true });
+  const errores = r.filter(x => x.charAt(0) === '✖').length;
+  SpreadsheetApp.getUi().alert(errores ? `Diagnóstico: ${errores} errores` : 'Diagnóstico: todo en orden',
+    r.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Las líneas del diagnóstico (✔ ⚠ ✖ ℹ) de un libro, sin ventanas: la
+ * consola lo pasa por todos los centros. op.pruebas: ejecutar también
+ * pruebasTesoreria() (no hace falta en cada centro: el código es el mismo).
+ */
+function diagnosticoDelLibro(ss, op) {
+  op = op || {};
+  return conLibro(ss, () => diagnosticoInterno(ss, op));
+}
+
+function diagnosticoInterno(ss, op) {
   const r = [];
+  if (op.pruebas) { try { registrarPrograma(ss); } catch (e) { /* solo lectura */ } }
   const ok = t => r.push('✔ ' + t), aviso = t => r.push('⚠ ' + t), error = t => r.push('✖ ' + t);
 
   // Archivos del proyecto.
@@ -23,14 +40,18 @@ function diagnostico() {
   const faltan = Object.keys(funciones).filter(k => { try { return typeof funciones[k]() !== 'function'; } catch (e) { return true; } });
   if (faltan.length) error('Faltan funciones (¿falta algún archivo del proyecto?): ' + faltan.join(', '));
 
-  // Config.js.
-  let hayConfig = true;
-  try { if (typeof CONFIG !== 'object') hayConfig = false; } catch (e) { hayConfig = false; }
-  if (!hayConfig) error('No hay Config.js en el proyecto: cópialo de Config.ejemplo.js y haz clasp push.');
-  ['ID_BD_SOCIOS', 'CARPETA_FACTURAS', 'CARPETA_EXTRACTOS', 'CARPETA_INFORMES'].forEach(k => {
-    if (!config(k)) error(`Falta ${k} en Config.js.`);
+  // Versión de la estructura y configuración del centro (hoja Ajustes).
+  const version = parseInt(mapaDeAjustes()[AJUSTES.VERSION], 10) || 0;
+  if (version < VERSION_ESTRUCTURA) error(`La estructura del libro es de la versión ${version || 'antigua'} y el programa espera la `
+    + `${VERSION_ESTRUCTURA}: Tesorería → Ejercicio → Reparar fórmulas, formatos y protecciones.`);
+  const fila = k => `«${CONFIG_EN_AJUSTES[k][0]}»`;
+  ['CARPETA_FACTURAS', 'CARPETA_EXTRACTOS', 'CARPETA_INFORMES'].forEach(k => {
+    if (!config(k)) error(`Falta ${fila(k)} en Ajustes: Tesorería → Ejercicio → Reparar la rellena sola.`);
   });
-  ['NOMBRE_CENTRO', 'IBAN_CUENTA', 'TITULAR_CUENTA'].forEach(k => { if (!config(k)) aviso(`${k} está vacío en Config.js.`); });
+  if (!config('ID_BD_SOCIOS')) r.push(`ℹ Sin base de socios (${fila('ID_BD_SOCIOS')} vacío en Ajustes): las cuotas se apuntan sin `
+    + 'reconocer al socio ni conciliar. Si el centro tiene BD Socios, pega allí su enlace.');
+  ['NOMBRE_CENTRO', 'CODIGO_CENTRO'].forEach(k => { if (!config(k)) aviso(`${fila(k)} está vacío en Ajustes (sale en los informes).`); });
+  ['IBAN_CUENTA', 'TITULAR_CUENTA'].forEach(k => { if (!config(k)) aviso(`${fila(k)} está vacío en Ajustes: lo pondrá el primer extracto que importes.`); });
 
   // Carpetas.
   ['CARPETA_FACTURAS', 'CARPETA_EXTRACTOS', 'CARPETA_INFORMES'].forEach(k => {
@@ -135,16 +156,15 @@ function diagnostico() {
     ok(`Caja: ${filas.length} asientos.`);
   }
 
-  const sinc = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'sincronizacionAutomatica');
+  const sinc = disparadoresDelLibro(ss, 'sincronizacionAutomatica').length > 0;
   r.push((sinc ? '✔ ' : 'ℹ ') + 'Sincronización automática con BD Socios: ' + (sinc ? 'instalada.' : 'no instalada (opcional).'));
 
-  const p = pruebasTesoreria();
-  if (p.fallos.length) error(`Pruebas: fallan ${p.fallos.length} de ${p.total}. Tesorería → Diagnóstico → Ejecutar las pruebas.`);
-  else ok(`Pruebas: los ${p.total} casos correctos.`);
-
-  const errores = r.filter(x => x.charAt(0) === '✖').length;
-  SpreadsheetApp.getUi().alert(errores ? `Diagnóstico: ${errores} errores` : 'Diagnóstico: todo en orden',
-    r.join('\n'), SpreadsheetApp.getUi().ButtonSet.OK);
+  if (op.pruebas) {
+    const p = pruebasTesoreria();
+    if (p.fallos.length) error(`Pruebas: fallan ${p.fallos.length} de ${p.total}. Tesorería → Diagnóstico → Ejecutar las pruebas.`);
+    else ok(`Pruebas: los ${p.total} casos correctos.`);
+  }
+  return r;
 }
 
 function ejecutarPruebas() {
@@ -538,6 +558,77 @@ function pruebasTesoreria() {
   caso('Cambios: en una pendiente, importe y asunto', planDeCambios(pend, { importe: { antes: -125.4, despues: '130' },
     asunto: { antes: '', despues: 'Material ñandú' } }, ctxV).escribir, { 'Cantidad': -130, 'Asunto transferencia': '20261015-01 Material nandu' });
   caso('Cambios: una pendiente no se queda sin IBAN', planDeCambios(pend, { cuentaAbono: { antes: '', despues: '' } }, ctxV).errores.length, 1);
+
+  // --- Gastos que no llevan factura (movimientos entre cuentas de JMV, devoluciones) ---
+  const devolucion = textoSinFactura(CAJA.MOTIVOS_SIN_FACTURA[1]);
+  caso('Sin factura: se reconoce, también escrito a mano', ['No requiere · Devolución a una familia o particular', 'no requiere',
+    ' NO REQUIERE: interno', 'https://drive.google.com/file/d/x', 'No', ''].map(noRequiereFactura), [true, true, true, false, false, false]);
+  caso('Sin factura: no está en «Facturas que faltan»', [clasificarAsiento(filaCaja({ cantidad: -40, metodo: 'Transferencia', partida: 'G12',
+    factura: devolucion })).factura, clasificarAsiento(filaCaja({ cantidad: -40, metodo: 'Transferencia', partida: 'G12' })).factura], [false, true]);
+  const ptSin = planDeTransferencia(Object.assign({}, tr, { sinFactura: 'no requiere · devolución a una familia o particular' }), ctxV);
+  caso('Sin factura: al apuntar la transferencia', [ptSin.errores, ptSin.valores['Factura'], pt.valores['Factura']], [[], devolucion, '']);
+  caso('Sin factura: motivo que no lo es', planDeTransferencia(Object.assign({}, tr, { sinFactura: 'Porque sí' }), ctxV).errores.length, 1);
+  caso('Sin factura: gasto en efectivo', planDeEfectivo({ tipo: 'gasto', fecha: '2026-10-07', importe: '5', partida: 'G12', descripcion: 'Devolución',
+    sinFactura: devolucion }, ctxV).filas[0]['Factura'], devolucion);
+  caso('Sin factura: marcar y desmarcar un asiento', [
+    planDeCambios(tarjeta, { sinFactura: { antes: '', despues: devolucion } }, ctxV).escribir,
+    planDeCambios(Object.assign({}, tarjeta, { factura: devolucion }), { sinFactura: { antes: devolucion, despues: '' } }, ctxV).escribir],
+    [{ 'Factura': devolucion }, { 'Factura': '' }]);
+  caso('Sin factura: nunca pisa una factura de verdad', planDeCambios(Object.assign({}, tarjeta, { factura: 'https://drive.google.com/x' }),
+    { sinFactura: { antes: '', despues: devolucion } }, ctxV).errores.length, 1);
+  caso('Sin factura: la ventana lo ve aparte del enlace', (a => [a.factura, a.sinFactura])(asientoParaVentana(
+    filaCaja({ id: 'x', cantidad: -40, factura: devolucion }))), ['', devolucion]);
+  const infSin = calcularInforme([
+    filaCaja({ id: 'h', fecha: D(6, 9, 2026), cantidad: -30, partida: 'G21', metodo: 'Transferencia', factura: devolucion }),
+    filaCaja({ id: 'i', fecha: D(6, 9, 2026), cantidad: -30, partida: 'G21', metodo: 'Transferencia' })],
+    { ingresos: [], gastos: [{ codigo: 'G21', descripcion: 'Actividades', presupuesto: 0 }] }, { banco: 100, efectivo: 0 }, D(30, 11, 2026));
+  caso('Sin factura: el informe no lo cuenta como pago sin factura', [infSin.gastosSinFactura.map(m => m.id),
+    infSin.movimientos.map(m => m.factura)], [['i'], [CAJA.SIN_FACTURA, '']]);
+
+  // --- Varios centros: configuración, partidas comunes, consola ---
+  const idFalso = 'IdDePruebaInventadoNoEsDeNadie0';
+  caso('ID de Drive: enlace de carpeta, de archivo, suelto o vacío', [
+    idDeDrive(`https://drive.google.com/drive/folders/${idFalso}?usp=sharing`),
+    idDeDrive(`https://docs.google.com/spreadsheets/d/${idFalso}/edit#gid=0`), idDeDrive(idFalso), idDeDrive('')],
+    [idFalso, idFalso, idFalso, '']);
+  caso('Menú: con la consola, todas sus funciones existen', limpiarMenu(entradasDelMenu(true),
+    n => { try { return typeof eval(n) === 'function'; } catch (e) { return false; } }).length, entradasDelMenu(true).length);
+  caso('Partida nacional: común, del centro por sección, no válida', ['I12', 'G23', 'I32', 'G14', 'I15', CAJA.TRASPASO, 'X1']
+    .map(partidaNacional), ['I12', 'G21', 'I31', 'G13', 'I14', '', '']);
+  caso('Partidas comunes: todas las por defecto lo son', Object.keys(NACIONAL.POR_DEFECTO).every(k => esPartidaComun(NACIONAL.POR_DEFECTO[k])), true);
+  const presCentro = { ingresos: [{ codigo: 'I11', descripcion: 'Cuotas', seccion: SECCIONES[0], importe: 100 },
+      { codigo: 'I21', descripcion: 'Actividades', seccion: SECCIONES[1], importe: 50 },
+      { codigo: 'I23', descripcion: 'Convivencia', seccion: SECCIONES[1], importe: 300 }],
+    gastos: [{ codigo: 'G21', descripcion: 'Actividades', seccion: SECCIONES[1], importe: 40 },
+      { codigo: 'G23', descripcion: 'Convivencia', seccion: SECCIONES[1], importe: 400 }] };
+  const movCentro = [
+    filaCaja({ id: 'a', fecha: D(5, 9, 2026), cantidad: 20, partida: 'I11', metodo: 'Transferencia' }),
+    filaCaja({ id: 'b', fecha: D(6, 9, 2026), cantidad: 250, partida: 'I23', metodo: 'Transferencia' }),
+    filaCaja({ id: 'c', fecha: D(7, 9, 2026), cantidad: 30, partida: 'I21', metodo: CAJA.EFECTIVO }),
+    filaCaja({ id: 'd', fecha: D(8, 9, 2026), cantidad: -100, partida: 'G23', metodo: 'Tarjeta' }),
+    filaCaja({ id: 'e', fecha: D(9, 9, 2026), cantidad: -10, partida: 'G32', metodo: 'Tarjeta' }),
+    filaCaja({ id: 'f', fecha: D(10, 9, 2026), cantidad: -80, partida: 'G23', metodo: 'Transferencia', pendiente: true })];
+  const rn = resumenNacional(movCentro, presCentro, { banco: 500, efectivo: 0 }, D(30, 9, 2026));
+  caso('Informe nacional: la convivencia cuenta en Actividades de centro', [rn.ingresos.I21, rn.gastos.G21],
+    [{ presupuesto: 350, real: 280 }, { presupuesto: 440, real: 100 }]);
+  caso('Informe nacional: partida que no está en el Presupuesto, en la común de su sección', rn.gastos.G31, { presupuesto: 0, real: 10 });
+  caso('Informe nacional: saldos sin lo pendiente', rn.saldos, { banco: 660, efectivo: 30, total: 690 });
+  const vn = valoresDelInformeNacional(rn);
+  caso('Informe nacional: cada fila tiene su valor', filasDelInformeNacional().filter(f => !f.titulo)
+    .filter(f => vn[f.clave] === undefined && f.clave.indexOf(':') < 0).map(f => f.clave), []);
+  caso('Informe nacional: resultado', vn.resultado, 190);
+  caso('Ejercicio: nombre del libro', [nombreDeEjercicio(2026), nombreDeEjercicio(2099)], ['Ejercicio 26-27', 'Ejercicio 99-00']);
+  caso('Consola: solo los centros del piloto', [{ Activo: 'Sí' }, { Activo: 'si' }, { Activo: 'No' }, { Activo: '' }].map(esCentroActivo),
+    [true, true, false, false]);
+  caso('Resumen del libro: listas y saldos', (() => { const x = resumenDelLibro(movCentro, { banco: 500, efectivo: 0 },
+    { ejercicio: '2026-2027' }); return [x.pendientes, x.completar, x.facturas, x.saldos.banco]; })(), [1, 0, 3, 660]);
+
+  const sinBd = planDeEfectivo({ tipo: 'cuotas', fecha: '2026-10-07', cuotas: [
+    { idSocio: '', nombre: ' Familia  Pérez ', partida: 'I11', importe: '20' }, { idSocio: '', nombre: 'Ana', partida: '', importe: '30' }] }, ctxV);
+  caso('Efectivo sin base de socios: con nombre y tramo, sin ID', [sinBd.filas.map(v => [v['Titular'], v['Partida'], v['ID socio'] || '']),
+    sinBd.errores.length], [[['Familia Pérez', 'I11', '']], 1]);
+  caso('Efectivo sin base de socios: el nombre no sale en el informe', conceptoParaInforme(filaCaja({ descripcion: 'Cuota 2026-2027',
+    titular: 'Familia Pérez', partida: 'I11' }), {}), 'Cuota 2026-2027');
 
   const fallos = casos.filter(c => JSON.stringify(c.obtenido) !== JSON.stringify(c.esperado))
     .map(c => `${c.nombre}: esperaba ${JSON.stringify(c.esperado)}, sale ${JSON.stringify(c.obtenido)}`);

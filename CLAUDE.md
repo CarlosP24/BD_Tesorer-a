@@ -1,9 +1,16 @@
 # JMV — Tesorería · Guía para el agente
 
-Google Apps Script vinculado al Google Sheet de **un ejercicio económico** del
-centro JMV (Parroquia San Vicente de Paúl): «Ejercicio 26-27», del 1 de
-septiembre de 2026 al 31 de agosto de 2027. Lo usa tesorería, sin perfil
+Libro de cuentas en Google Sheets para los centros y áreas de JMV España: un
+Sheet por centro y **ejercicio económico** («Ejercicio 26-27», del 1 de
+septiembre de 2026 al 31 de agosto de 2027). Lo usa tesorería, sin perfil
 técnico: todo tiene que entenderse desde la hoja y poder arreglarse a mano.
+
+Cada libro lleva **su propio script vinculado** con el código de este
+repositorio, y la administración sube cada versión a todos los libros activos
+desde la consola nacional (`despliegue/desplegar.js`). Lo propio de cada
+centro está en su hoja Ajustes. El despliegue es **progresivo** (piloto en
+algunos centros y áreas) y **solo un centro tiene BD Socios**: todo lo de
+socios es opcional. Instalación y publicación: [DESPLIEGUE.md](DESPLIEGUE.md).
 
 Proyecto hermano: **BD Socios** (`../BD_Socios`, su `CLAUDE.md`). De allí
 vienen el estilo, las trampas de Apps Script (§3 de su guía) y la pestaña
@@ -16,19 +23,25 @@ código no coincide, **manda el código**.
 
 | Archivo | Qué hace |
 |---|---|
-| `00_Estructura.js` | Constantes (`HOJAS`, `CAJA`, `PRESUPUESTO`, `AJUSTES`), creación y reparación de hojas, fórmulas, validaciones, formato condicional, protecciones, `leerAjustes()`, `leerPartidas()`, utilidades, menú (`entradasDelMenu()`), `onOpen()`, `onEdit()` |
+| `00_Estructura.js` | Constantes (`HOJAS`, `CAJA`, `PRESUPUESTO`, `AJUSTES`, `CONFIG_EN_AJUSTES`, `VERSION_ESTRUCTURA`), libro de trabajo (`libro()`, `conLibro()`, `bloqueo()`), configuración del centro (`config()`, `completarConfiguracion()`), `montarLibro()` / `repararLibro()`, fórmulas, validaciones, formato condicional, protecciones, `leerAjustes()`, `leerPartidas()`, utilidades, menú (`entradasDelMenu()`), `onOpen()`, `onInstall()`, `onEdit()` |
 | `01_Caja.js` | `leerCaja()` / `filaDeCaja()`, ID de transacción, orden, `codigoDeOpcion()`, dividir asiento, traspasos, facturas, diálogo de subida (`recibirArchivo()`) |
 | `02_Extractos.js` | Importación del Excel del banco: `leerExtracto()` y `planificarImportacion()` (puras), `importarExtracto()` |
 | `03_Socios.js` | `identificarSocio()` y `planificarSincronizacion()` (puras), `sincronizarConBdSocios()`, caché de pagos de BD Socios |
 | `04_Actividades.js` | Hojas de actividad y lista de subpartidas |
 | `05_Informes.js` | `calcularInforme()` / `calcularInformeActividad()` (puras) y PDF |
-| `06_Ejercicios.js` | Crear el ejercicio siguiente, traer saldos iniciales |
-| `07_Diagnostico.js` | `diagnostico()` y `pruebasTesoreria()` (casos con datos inventados) |
+| `06_Ejercicios.js` | Crear el ejercicio siguiente (`ejercicioSiguiente()`, sin ventanas), traer saldos iniciales |
+| `07_Diagnostico.js` | `diagnostico()` / `diagnosticoDelLibro()` y `pruebasTesoreria()` (casos con datos inventados) |
 | `08_Asientos.js` | Servidor de la ventana de asientos: `datosDeAsientos()`, `guardarTransferencia()`, `guardarEfectivo()`, `guardarCambiosDeAsiento()`; lógica pura (`planDeTransferencia()`, `planDeEfectivo()`, `planDeCambios()`, `clasificarAsiento()`, `ibanValido()`, `documentoFiscalValido()`, `asuntoDeTransferencia()`) |
+| `09_Nacional.js` | Plan de partidas común (`partidaNacional()`, `asegurarPartidasComunes()`) y `resumenNacional()` (pura) |
+| `10_Consola.js` | Consola nacional: centros, estado, crear libros de cada año, reparar todos, informe nacional (el ejercicio lo da la fecha de corte: `libroDelEjercicio()` sigue «Ejercicio anterior» desde el libro que apunta la consola) |
 | `Asientos.html` | La ventana de asientos (traspaso, transferencias, pendientes, por completar, facturas, efectivo) |
+| `Panel.html` | Panel lateral con un botón por tarea |
 | `Subir.html`, `Actividad.html`, `Informes.html` | Diálogos |
 | `Informe.html` | Plantilla del PDF (scriptlets de HtmlService) |
-| `Config.js` | **No está en git** (§6). `Config.ejemplo.js` es su plantilla |
+| `Config.js` | Solo de la instalación antigua; no está en git ni se despliega nunca (§6) |
+| `DESPLIEGUE.md` | Consola, libro plantilla, libros del piloto, cómo se publica cada versión y cómo se migra el centro antiguo |
+| `despliegue/desplegar.js` | Sube el programa a todos los scripts de `despliegue/proyectos.txt` (no va a git; lo da la consola) |
+| `despliegue/config-a-ajustes.js` | Saca los valores de un `Config.js` antiguo como filas de Ajustes, para pegarlas antes de desplegar y reparar ese libro |
 | `pruebas/ejecutar.js` | Ejecuta `pruebasTesoreria()` en Node |
 | `docs/` | Guía de uso para tesorería (MkDocs Material), lista para llevarla a la web de documentación de JMV España (§8) |
 | `pruebas/capturas/` | Genera las capturas de `docs/assets/img/` con datos inventados (§8) |
@@ -46,7 +59,7 @@ los cursos). Hojas:
 | `Presupuesto` | Resumen por sección (filas 1-5) y tabla de partidas desde la fila 11: ingresos en A-D, gastos en E-H |
 | `Cuentas` | Espejo del Presupuesto con importes reales. **Solo fórmulas** |
 | `Act · …`, `Fin · …` | Hojas de actividad y de financiación (se reconocen por metadatos `tesoreria.actividad`, no por el nombre; el valor es el tipo, `ACT.TIPOS`) |
-| `Ajustes` | Ejercicio, fechas, curso de BD Socios, partida de cuotas por tramo, ejercicio anterior |
+| `Ajustes` | Ejercicio, fechas, curso de BD Socios, partida de cuotas por tramo, ejercicio anterior, **configuración del centro** (`CONFIG_EN_AJUSTES`) y versión de la estructura |
 | `Log` | Auditoría |
 | `_Listas` | Oculta: listas de los desplegables |
 
@@ -106,6 +119,18 @@ nueva, va al final de `CAJA.COLUMNAS` y se crea con «Reparar».
   fusiona y avisa) o, si el banco lo cortara, por importe, siendo
   transferencia y hasta `DIAS_PENDIENTE` días después; entonces le pone la
   fecha del banco. `onEdit` no toca «Pendiente» (no está vacía).
+- **Gastos que no llevan factura** (decisión de tesorería): movimientos
+  entre cuentas de JMV y devoluciones a familias o particulares. Se marcan
+  en la ventana (recuadro Factura, en todas las que apuntan un gasto) y van
+  **en la propia celda Factura** como `No requiere · <motivo>`
+  (`CAJA.SIN_FACTURA`, `CAJA.MOTIVOS_SIN_FACTURA`, `textoSinFactura()`); a
+  mano basta con que empiece por «No requiere» (`noRequiereFactura()`). Como
+  la celda no está vacía, todo lo que mira «tiene factura» (amarillo,
+  `clasificarAsiento()`, `esGastoQuePideFactura()`) ya lo trata bien; lo que
+  espera un enlace tiene que distinguirlo (`asientoParaVentana()` lo separa
+  en `factura` / `sinFactura`; el informe pone «No requiere»). La marca nunca
+  pisa una factura de verdad (`planDeCambios()`), y subir una factura sí
+  sustituye a la marca. Sin columna nueva ni cambio de estructura.
 - **Desplegables con nombre.** La lista de Partida y Subpartida (`_Listas`)
   ofrece primero «G21 · Convivencia» y, al final, los códigos solos; al
   elegir, `onEdit` deja solo el código (`codigoDeOpcion()`). Los códigos
@@ -140,15 +165,66 @@ nueva, va al final de `CAJA.COLUMNAS` y se crea con «Reparar».
   tabla, solo código y descripción).
 - **Lo que escribe una persona manda**: la importación y la sincronización
   solo rellenan Partida, Método, etc. si están vacíos.
-- **Un ejercicio cerrado conserva su código.** «Crear el ejercicio siguiente»
-  copia el archivo y Drive copia con él el proyecto de Apps Script. El
-  `scriptId` cambia cada año (ver README).
+- **Script vinculado en cada libro + despliegue central** (decisión de
+  2026-11). Se descartó el **complemento interno**: cada centro tiene UNA
+  cuenta @jmvesp.org y quienes llevan la tesorería usan @gmail (la cuenta del
+  centro les da acceso). Un complemento privado del dominio no llega a cuentas
+  externas, y publicarlo fuera exige verificación OAuth con auditoría anual de
+  pago por el permiso restringido `drive`. El script vinculado lo ejecuta
+  cualquier editor, con el aviso de «app no verificada» una vez por libro. No
+  lo vuelvas a proponer salvo que cambie lo de las cuentas. El código aún
+  sabe funcionar como complemento (`esComplemento()`: menú en Extensiones),
+  pero no se usa. Para que todos tengan la misma versión:
+    - **Cada libro apunta su script** en Ajustes → «Programa (ID del script)»
+      al abrirse (`registrarPrograma()` en `onOpen`). La copia anual y la de la
+      plantilla vacían esa fila (`prepararEjercicioNuevo()`): la copia tiene
+      script nuevo. La consola recoge los ID («Actualizar el estado») y da la
+      lista para `despliegue/desplegar.js`, que pasa las pruebas y hace
+      `clasp push` a cada uno desde la cuenta de administración. Los
+      ejercicios cerrados no se despliegan: conservan su código.
+    - **Libro plantilla**: los libros nuevos de centros sin libro anterior se
+      copian de él (un libro sin script no serviría). `otroCentro` en
+      `prepararEjercicioNuevo()` vacía su configuración.
+  Además, para que el mismo código sirva en todos los centros:
+    - **Lo de cada centro, en Ajustes** (`CONFIG_EN_AJUSTES`), leído con
+      `config('CLAVE')`. `completarConfiguracion()` lo rellena al montar o
+      reparar: carpetas `Facturas`, `Extractos`, `Memorias` junto al libro
+      (las crea si faltan), nombre de la unidad compartida, la BD Socios de la
+      misma unidad (`buscarBdSocios()`), y lo que hubiera en un `Config.js`
+      antiguo. El primer extracto pone IBAN y titular. Nunca se vuelve a un
+      archivo de configuración: se lo llevaría a todos los centros.
+    - **`libro()` en vez de `getActiveSpreadsheet()`**: la consola trabaja
+      sobre libros que no están abiertos y los fija con `conLibro()`.
+    - **`bloqueo()`** es el del documento.
+    - **Disparadores por libro**: al instalarlo se guarda
+      `libro:<id del disparador>` → ID del libro en las propiedades de
+      usuario (`disparadoresDelLibro()`). La consola no programa
+      continuaciones: cada recorrido guarda por dónde va (`recorrerCentros()`).
+    - **`VERSION_ESTRUCTURA`**: el despliegue sube el código, pero la
+      estructura de cada libro (columnas, fórmulas, validaciones) no cambia
+      sola. Súbela cuando cambie algo de `montar*()`; el Diagnóstico, el panel
+      y la consola avisan, y la consola repara todos.
+- **Plan de partidas común**: `PRESUPUESTO.INGRESOS` / `GASTOS` son las
+  partidas de todos los centros (en negrita en el Presupuesto; «Reparar»
+  añade las que falten). Las propias de un centro suman en el informe
+  nacional en la común de su sección (`NACIONAL.POR_DEFECTO`). Es una
+  propuesta a validar por el equipo nacional.
+- **Despliegue progresivo**: la consola solo trabaja con los centros con
+  `Activo = Sí` (`esCentroActivo()`); los que descubre entran con «No».
+- **BD Socios es opcional** (de momento solo la tiene un centro): sin ella no
+  hay identificación ni sincronización, el Diagnóstico lo dice con ℹ, el panel
+  no enseña «Sincronizar», y las cuotas en mano se apuntan con nombre y tramo
+  (`planDeEfectivo()` sin `idSocio`: el nombre va en **Titular**, que no sale
+  en los informes, y nunca en la Descripción, que sí sale).
+- **Un ejercicio cerrado se queda como está**: «Crear el ejercicio
+  siguiente» copia el archivo y vacía la copia (`ejercicioSiguiente()`).
 
 ---
 
 ## 3. BD Socios: el contrato
 
-Lo que este proyecto lee y escribe en el Sheet de BD Socios (`CONFIG.ID_BD_SOCIOS`):
+Lo que este proyecto lee y escribe en el Sheet de BD Socios (`config('ID_BD_SOCIOS')`,
+fila «BD Socios (archivo)» de Ajustes; si está vacía, nada de esto ocurre):
 
 - Lee `Socios`, `Familias`, `Inscripciones` y `Pagos` (columnas en `SOCIOS.COLUMNAS`;
   si BD Socios renombra una, `tablaDeBdSocios()` falla con el nombre).
@@ -179,7 +255,7 @@ Lo que este proyecto lee y escribe en el Sheet de BD Socios (`CONFIG.ID_BD_SOCIO
 
 El repositorio es público como el de BD Socios. **Nunca** van a git:
 
-- `Config.js`, `.clasp.json`, `.clasprc.json`.
+- `Config.js` (antiguo), `.clasp.json`, `.clasp.*.json`, `.clasprc.json`.
 - Ningún extracto, hoja de cálculo, CSV o PDF (`.gitignore` los bloquea por
   extensión). Un extracto lleva nombres de familias **y de menores** en el
   concepto, e IBAN.
@@ -197,8 +273,19 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
 
 - **Espacio de nombres compartido**: `grep -n "^function nombre" *.js` antes
   de crear una función.
-- **`Config.js` se lee siempre con `config('CLAVE')`**, nunca `CONFIG.X` al
-  cargar un archivo: Config.js carga después de los `NN_*.js`.
+- **Nunca `clasp create` ni `clasp pull` en la carpeta del repositorio**:
+  escriben un `appsscript.json` por defecto encima del nuestro (sin el
+  servicio de Drive ni los permisos) y el despliegue lo sube a todos. Pasó:
+  «ReferenceError: Drive is not defined» en la consola. Se crean en una
+  carpeta temporal (DESPLIEGUE.md), y `desplegar.js` se niega a subir un
+  manifiesto sin Drive, sin permisos o sin la zona horaria de Madrid.
+- **La configuración del centro se lee siempre con `config('CLAVE')`**: lee
+  Ajustes una vez por ejecución y nunca falla (devuelve '' si no está). En
+  Node (pruebas, capturas) no hay Ajustes: se rellena `CONFIG_FIJA`.
+- **`onOpen` es un disparador simple**: corre con quien abre, que puede no
+  tener permiso de edición (por eso `registrarPrograma()` va en un try) y
+  aún no haber autorizado el script (solo puede tocar su propio libro).
+  Que sea rápido: se ejecuta en cada apertura.
 - **Las fórmulas del código están en sintaxis inglesa** (comas; `{a, b; c}`)
   **y se escriben siempre dentro de `conFormulasEnIngles()`**, que pone la
   hoja en en_US mientras tanto y la devuelve a su idioma. En la hoja de la
@@ -215,16 +302,21 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
   la columna Saldo, en vez de `Range.sort()` + volver a poner la fórmula.
 - **Nombres en `LET`/`LAMBDA` descriptivos**, nunca de una letra (`c`, `r`…
   pueden chocar con referencias).
-- **Protecciones estrictas solo donde el script no escribe al trabajar**
-  (Cuentas, resumen del Presupuesto, lo copiado en actividades). Donde
-  escribe (IDs, columnas técnicas, Log, Ajustes) son de aviso: una estricta
-  haría fallar el script cuando lo lanza otra persona del equipo.
+- **Todas las protecciones son de aviso** (`protegerHojas()`,
+  `protegerHojaDeActividad()`), como en BD Socios §3.11. Antes, Cuentas, el
+  resumen del Presupuesto y las hojas de actividad eran estrictas (solo quien
+  las ponía podía editar), y con varias personas de tesorería y la consola
+  reparando con otra cuenta, «Reparar» fallaba con «Estás intentando editar
+  una celda o un objeto protegidos» (pasó). Los libros con protecciones
+  estrictas antiguas las pierden al reparar; si quien repara no puede
+  editarlas, `comprobarProteccionesAjenas()` para antes de tocar nada y dice
+  quién tiene que reparar una vez.
 - **`onEdit` es un disparador simple**: no puede abrir BD Socios ni Drive.
   Por eso la sincronización va por menú, tras importar o por disparador
   horario (`instalarSincronizacionAutomatica()`).
 - **Activar una hoja oculta la muestra** (`ordenarHojas()` no toca `_Listas`).
 - **Bytes con signo**: en Apps Script `0xD0` es `-48` (`filasDeArchivo()`).
-- **Nada de `//` en el script de `Asientos.html`** (ni comentarios ni
+- **Nada de `//` en el script de `Asientos.html` ni `Panel.html`** (ni comentarios ni
   direcciones): al servir la plantilla, Apps Script lo toma por comentario y
   corta la línea (BD Socios §3.9). Comentarios con `/* */`.
 - **`google.script.run` no devuelve `Date`**: lo que va a la ventana lleva
@@ -240,9 +332,16 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
 
 | Qué | Dónde |
 |---|---|
-| Por instalación: IDs de BD Socios y carpetas, IBAN, titular, centro, logo | `Config.js` (no versionado; plantilla `Config.ejemplo.js`, que `.claspignore` excluye) |
+| Por centro: nombre, código, BD Socios, carpetas, IBAN, titular, logo | Hoja `Ajustes` de cada libro (`CONFIG_EN_AJUSTES`; viaja sola al ejercicio siguiente). La consola lleva el código y el nombre |
 | Por ejercicio: fechas, curso, partidas de cuotas por tramo | Hoja `Ajustes` |
-| Constantes de diseño | En su archivo |
+| Común a todos los centros: plan de partidas, constantes de diseño | En el código |
+| A qué scripts desplegar | `despliegue/proyectos.txt` (no va a git; lo genera la consola) |
+
+`Config.js` solo lo usaba la primera instalación (un archivo por centro):
+`.claspignore` y `desplegar.js` lo excluyen siempre, y `configAntigua()`
+solo sirve para pasar sus valores a Ajustes si un libro antiguo se repara
+con él aún presente. No vuelvas a un archivo de configuración: con un solo
+código para todos, se lo llevaría a todos los centros.
 
 ---
 
@@ -251,18 +350,22 @@ En Drive: el extracto temporal convertido se borra **en definitivo**
 ```bash
 node pruebas/ejecutar.js                       # «Los N casos correctos»
 for f in *.js; do cp "$f" "$TMPDIR/c.js" && node --check "$TMPDIR/c.js" || echo "$f"; done
-clasp status                                   # qué subiría (Config.js sí, Config.ejemplo.js no)
-clasp push
+clasp status                                   # qué subiría a .clasp.json (nunca Config.js)
+clasp push                                     # a UN libro: el de pruebas
+node despliegue/desplegar.js --prueba          # a todos (DESPLIEGUE.md §5); sin --prueba, sube
 ```
 
-- `clasp push` borra del proyecto lo que no exista en local: **sin
-  `Config.js` local te llevas el de producción.**
+- Prueba primero en **un libro de pruebas** (su script en `.clasp.json`) y
+  solo después despliega a todos.
+- `clasp push` borra del proyecto lo que no exista en local (por eso el
+  despliegue quita el `Config.js` de los libros antiguos).
 - Si tocas identificación, importación, sincronización o informes, añade un
   caso a `pruebasTesoreria()`. Para probar con un extracto real, hazlo fuera
   del repositorio (en un directorio temporal), nunca con el archivo dentro.
-- Antes de publicar: `git status` sin `Config.js` ni `.clasp.json`, y
+- Antes de publicar: `git status` sin `Config.js` ni `.clasp*.json`, y
   `grep -nE "1[A-Za-z0-9_-]{25,}|ES\d{2} ?\d{4}" *.js *.html` sin resultados
-  fuera de `Config.js`.
+  fuera de `Config.js` (lo que sale son los IBAN `ES00…` de mentira de las
+  pruebas).
 
 ## 8. Documentación de uso (`docs/`)
 
@@ -321,6 +424,12 @@ Lo primero que conviene mirar en la primera ejecución: que el orden de Caja
 conserve el del banco dentro del mismo día (la fila en rojo de «Saldo
 extracto» lo delataría), la conversión del `.xls` vía
 `Drive.Files.create`, y el aspecto del PDF con el conversor de Google.
+
+Tampoco se han ejecutado aún la consola ni el despliegue: falta ver
+`completarConfiguracion()` en una unidad compartida real (carpetas, nombre,
+BD Socios), `registrarPrograma()` en `onOpen` con una cuenta @gmail, la
+copia desde la plantilla, `desplegar.js` contra scripts reales (clasp 3, `-P`
+con `rootDir` absoluto) y los disparadores con la propiedad `libro:…`.
 
 La ventana de asientos se ha probado en Chrome con `google.script.run`
 simulado. En Sheets falta ver: que al elegir «G21 · …» en el desplegable la

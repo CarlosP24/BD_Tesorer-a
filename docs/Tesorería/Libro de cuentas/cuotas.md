@@ -1,9 +1,26 @@
 # Cuotas de socio
 
-El libro está conectado con la **base de datos de socios** (BD Socios). Cada
-cuota que se cobra se apunta en el libro **con el número del socio** que paga
-(`JMV-000042`), y el libro la marca como pagada en la base de socios. Así
-secretaría sabe quién ha pagado sin que nadie tenga que pasar listas.
+Si tu centro tiene la **base de datos de socios** (BD Socios), el libro se
+conecta con ella. Cada cuota que se cobra se apunta en el libro **con el
+número del socio** que paga (`JMV-000042`), y el libro la marca como pagada en
+la base de socios. Así secretaría sabe quién ha pagado sin que nadie tenga que
+pasar listas.
+
+!!! info "Si tu centro todavía no tiene base de socios"
+
+    Casi ninguno la tiene aún, y no pasa nada: el libro funciona igual. Lo
+    único que cambia es que el libro no sabe de quién es cada cuota. Entonces:
+
+    - las cuotas que llegan por el banco entran **sin partida**. Pónsela tú:
+      la de cuotas del tramo que corresponda (`I11`, `I12` o `I13`), desde
+      [Apuntar a mano en la hoja](escribir-en-la-hoja.md);
+    - las cuotas en mano se apuntan con el nombre de quien paga y su tramo,
+      desde [Efectivo y traspasos](efectivo.md#cuotas-cobradas-en-mano);
+    - no hay nada que sincronizar: el panel no enseña ese botón.
+
+    El resto de esta página es solo para los centros con base de socios.
+    Cuando tu centro la tenga, la administración la conectará en la hoja
+    **Ajustes**.
 
 ## Cuotas que llegan por el banco
 

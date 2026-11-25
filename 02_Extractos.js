@@ -43,12 +43,12 @@ function abrirImportarExtracto() {
   abrirDialogoDeSubida('extracto', 'Importar extracto bancario',
     'Sube el Excel de movimientos tal cual lo descargas del banco. Se puede importar un extracto '
     + 'que se solape con otro ya importado: lo repetido no se vuelve a meter.',
-    '.xls,.xlsx,.csv', {});
+    '.xls,.xlsx,.csv', { bdSocios: !!config('ID_BD_SOCIOS') });
 }
 
 /** Lo llama recibirArchivo() (Subir.html). Devuelve { titulo, lineas }. */
 function importarExtracto(blob, opciones) {
-  const lock = LockService.getScriptLock();
+  const lock = bloqueo();
   if (!lock.tryLock(30000)) throw new Error('Hay otra importación o sincronización en marcha. Prueba en un minuto.');
   try {
     return importarExtractoBloqueado(blob, opciones || {});
@@ -58,7 +58,7 @@ function importarExtracto(blob, opciones) {
 }
 
 function importarExtractoBloqueado(blob, opciones) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const aj = leerAjustes(ss);
   const h = ss.getSheetByName(HOJAS.CAJA);
   const lineas = [];
@@ -70,8 +70,18 @@ function importarExtractoBloqueado(blob, opciones) {
   // tiene arreglo después.
   const nuestra = compactar(config('IBAN_CUENTA'));
   if (nuestra && ext.cuenta && compactar(ext.cuenta) !== nuestra) {
-    throw new Error(`El extracto es de la cuenta ${ext.cuenta}, no de la de Config.js (${config('IBAN_CUENTA')}). `
+    throw new Error(`El extracto es de la cuenta ${ext.cuenta}, no de la del centro (${config('IBAN_CUENTA')}, en Ajustes). `
       + 'No se ha importado nada.');
+  }
+  // El primer extracto dice cuál es la cuenta del centro y su titular.
+  const aprendido = [];
+  if (!nuestra && ext.cuenta) {
+    escribirAjuste(ss, CONFIG_EN_AJUSTES.IBAN_CUENTA[0], formatoIban(ext.cuenta), CONFIG_EN_AJUSTES.IBAN_CUENTA[1]);
+    aprendido.push('la cuenta ' + formatoIban(ext.cuenta));
+  }
+  if (!config('TITULAR_CUENTA') && ext.titular) {
+    escribirAjuste(ss, CONFIG_EN_AJUSTES.TITULAR_CUENTA[0], ext.titular, CONFIG_EN_AJUSTES.TITULAR_CUENTA[1]);
+    aprendido.push('el titular «' + ext.titular + '»');
   }
 
   const caja = leerCaja(ss);
@@ -81,6 +91,7 @@ function importarExtractoBloqueado(blob, opciones) {
   lineas.push(`Extracto${ext.cuenta ? ' de la cuenta …' + compactar(ext.cuenta).slice(-4) : ''}`
     + ` del ${fechaCorta(primero)} al ${fechaCorta(ultimo)}: ${ext.movimientos.length} movimientos.`);
   ext.avisos.forEach(a => lineas.push('⚠ ' + a));
+  if (aprendido.length) lineas.push(`Apuntados en Ajustes ${aprendido.join(' y ')}: los próximos extractos tienen que ser de esta cuenta.`);
 
   // Socios: solo si BD Socios está configurado. Si no, se importa igual.
   let ident = null;

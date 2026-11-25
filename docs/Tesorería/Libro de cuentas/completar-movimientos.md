@@ -44,7 +44,9 @@ se pagó. Eso no se puede cambiar: es lo que pasó en el banco.
    nunca, porque puede llevar datos personales.
 4. **Proveedor** y su **CIF**, si vienen en el ticket o la factura.
 5. **Factura**: arrastra la foto del ticket o el PDF de la factura al
-   recuadro.
+   recuadro. Si es un movimiento entre cuentas de JMV o una devolución,
+   marca **No necesita factura** con su motivo
+   ([Gastos que no llevan factura](facturas.md#gastos-que-no-llevan-factura)).
 
 Los campos que cambias se ponen en naranja hasta que guardas.
 

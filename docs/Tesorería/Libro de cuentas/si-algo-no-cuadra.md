@@ -69,8 +69,10 @@ Si ya ha pasado tiempo desde que la hiciste:
 
 - Espera unos segundos: tarda un poco en cargar.
 - Recarga la página (tecla **F5**).
-- Comprueba que has entrado con tu cuenta del centro, y que tienes permiso de
-  edición sobre el libro.
+- Comprueba que has entrado con la cuenta a la que el centro ha dado acceso al
+  libro, y que tienes permiso de **edición** (no solo de lectura).
+- Si nunca lo has usado en este libro, al elegir una opción te pedirá
+  autorizar el programa: ver [Primeros pasos](primeros-pasos.md#5-la-primera-vez-autorizar-el-programa).
 
 ## «Hay otra importación o sincronización en marcha»
 

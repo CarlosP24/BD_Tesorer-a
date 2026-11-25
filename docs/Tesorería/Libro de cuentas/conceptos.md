@@ -96,7 +96,9 @@ en la otra). La ventana de traspasos las crea las dos a la vez
 Cada gasto tiene que tener su **factura** o ticket: es la prueba de en qué se
 gastó el dinero, y la pide cualquier revisión de cuentas. En el libro se sube
 como PDF o foto y queda guardada en la carpeta de facturas del ejercicio, con
-el ID del asiento como nombre ([Facturas](facturas.md)).
+el ID del asiento como nombre ([Facturas](facturas.md)). Las únicas
+excepciones son los movimientos entre cuentas de JMV y las devoluciones a
+familias o particulares, que se marcan como que **no requieren** factura.
 
 ## El ejercicio: el año de las cuentas
 

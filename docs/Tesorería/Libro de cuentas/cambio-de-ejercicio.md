@@ -18,6 +18,15 @@ agosto**:
 
 ### 2. Crea el libro del ejercicio siguiente
 
+!!! info "Si tu centro está en el piloto, este paso no es tuyo"
+
+    En los centros y áreas del piloto, el libro nuevo lo crea el equipo
+    nacional desde la [consola nacional](consola-nacional.md), para todos a la
+    vez, a primeros de septiembre. Antes de crear nada, mira en tu carpeta
+    Tesorería si ya está **Ejercicio 27-28**. Si está, salta al paso 3. Si
+    está y tú aún no has cerrado el viejo, termina el paso 1 igualmente y
+    después **trae los saldos iniciales** (paso 3).
+
 1. **En el libro que termina**, menú **Tesorería → Ejercicio → Crear el
    ejercicio siguiente…**
 2. El libro te dice con qué saldos empezará el nuevo (los del 31 de agosto) y
@@ -30,14 +39,19 @@ agosto**:
 
 ### 3. Pon en marcha el libro nuevo
 
-1. Abre **Ejercicio 27-28**. Espera a que aparezca el menú **Tesorería** y
-   autoriza el programa (es un archivo nuevo, así que lo vuelve a pedir).
-2. Menú **Tesorería → Diagnóstico → Diagnóstico del sistema**. Tiene que acabar
+1. Abre **Ejercicio 27-28**. Lleva el mismo programa que el anterior, pero es
+   otro archivo: la primera vez que uses el menú **Tesorería**, cada persona
+   tendrá que **autorizarlo** otra vez (ver
+   [Primeros pasos](primeros-pasos.md#5-la-primera-vez-autorizar-el-programa)).
+2. Si el libro nuevo se creó **antes** de que terminaras de cerrar el viejo
+   (por ejemplo, porque lo creó la consola nacional a primeros de
+   septiembre), menú **Tesorería → Ejercicio → Traer los saldos iniciales del
+   ejercicio anterior**. Así empieza con los saldos del 31 de agosto
+   definitivos.
+3. Menú **Tesorería → Diagnóstico → Diagnóstico del sistema**. Tiene que acabar
    sin ningún ✖.
-3. Rellena el **Presupuesto** del curso nuevo y crea las hojas de las
+4. Rellena el **Presupuesto** del curso nuevo y crea las hojas de las
    actividades.
-4. Avisa a quien mantenga el programa del libro: tiene que apuntar el libro
-   nuevo para poder actualizarlo.
 
 !!! warning "La sincronización automática"
 

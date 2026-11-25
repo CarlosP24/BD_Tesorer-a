@@ -26,7 +26,7 @@ const PREFIJO_REFERENCIA = 'TES-';
 
 /** Las filas con datos de Caja, como objetos (ver filaDeCaja()). */
 function leerCaja(ss) {
-  const h = (ss || SpreadsheetApp.getActiveSpreadsheet()).getSheetByName(HOJAS.CAJA);
+  const h = (ss || libro()).getSheetByName(HOJAS.CAJA);
   const ultima = ultimaFilaDeCaja(h);
   if (ultima < CAJA.PRIMERA_FILA) return [];
   const valores = h.getRange(CAJA.PRIMERA_FILA, 1, ultima - CAJA.PRIMERA_FILA + 1, CAJA.COLUMNAS.length).getValues();
@@ -211,7 +211,7 @@ function completarFilas(h, desde, hasta) {
 }
 
 function asignarIdsQueFaltan() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const h = ss.getSheetByName(HOJAS.CAJA);
   const ultima = ultimaFilaDeCaja(h);
   const puestos = ultima >= CAJA.PRIMERA_FILA ? completarFilas(h, CAJA.PRIMERA_FILA, ultima) : 0;
@@ -284,8 +284,8 @@ function ordenDeCaja(valores) {
 }
 
 function ordenarCajaAhora() {
-  const n = ordenarCaja(SpreadsheetApp.getActiveSpreadsheet());
-  SpreadsheetApp.getActiveSpreadsheet().toast(`${n} filas ordenadas por fecha de pago.`, 'Caja', 5);
+  const n = ordenarCaja(libro());
+  libro().toast(`${n} filas ordenadas por fecha de pago.`, 'Caja', 5);
 }
 
 
@@ -300,7 +300,7 @@ function ordenarCajaAhora() {
 // ==================================================================
 
 function dividirAsientoSeleccionado() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const ui = SpreadsheetApp.getUi();
   const h = ss.getActiveSheet();
   const fila = h.getActiveRange() ? h.getActiveRange().getRow() : 0;
@@ -375,7 +375,7 @@ function abrirApuntarTraspaso() { abrirAsientos('traspaso'); }
 
 /** Lo llama Asientos.html. datos: { tipo: 'ingreso'|'retirada', fecha: 'aaaa-mm-dd', importe, descripcion }. */
 function apuntarTraspaso(datos) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const h = ss.getSheetByName(HOJAS.CAJA);
   const fecha = fechaDeTexto(datos.fecha);
   const importe = redondear(Math.abs(numeroDeTexto(datos.importe) || 0));
@@ -422,7 +422,7 @@ function apuntarTraspaso(datos) {
 
 /** La fila de Caja seleccionada como objeto, o null (y avisa). */
 function filaSeleccionadaDeCaja() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const h = ss.getActiveSheet();
   const fila = h.getActiveRange() ? h.getActiveRange().getRow() : 0;
   if (h.getName() !== HOJAS.CAJA || fila < CAJA.PRIMERA_FILA) {
@@ -523,7 +523,7 @@ function convertirEnTraspasoSeleccionado() {
 // ==================================================================
 
 function abrirAdjuntarFactura() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const h = ss.getActiveSheet();
   const fila = h.getActiveRange() ? h.getActiveRange().getRow() : 0;
   if (h.getName() !== HOJAS.CAJA || fila < CAJA.PRIMERA_FILA) {
@@ -540,7 +540,7 @@ function abrirAdjuntarFactura() {
 
 /** Lo llama recibirArchivo() (Subir.html). */
 function guardarFactura(blob, contexto) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const h = ss.getSheetByName(HOJAS.CAJA);
   const id = contexto.id;
   const fila = filaDeId(h, id);
@@ -558,7 +558,8 @@ function guardarFactura(blob, contexto) {
   registrar('INFO', `Factura de ${id}`, `${nombre} · ${archivo.getUrl()}`);
   return { titulo: 'Factura guardada', lineas: [
     `Guardada como ${nombre} en la carpeta ${carpeta.getName()} de facturas.`,
-    anterior ? 'El asiento ya tenía un enlace a otra factura: ahora apunta a esta. La anterior sigue en la carpeta.' : ''
+    !anterior ? '' : noRequiereFactura(anterior) ? `Estaba marcado «${anterior}»: ahora apunta a la factura.`
+      : 'El asiento ya tenía un enlace a otra factura: ahora apunta a esta. La anterior sigue en la carpeta.'
   ].filter(Boolean) };
 }
 
@@ -568,7 +569,7 @@ function guardarFactura(blob, contexto) {
  * factura.
  */
 function vincularFacturasDeLaCarpeta() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const ui = SpreadsheetApp.getUi();
   const h = ss.getSheetByName(HOJAS.CAJA);
   const carpeta = carpetaDelEjercicio('CARPETA_FACTURAS', ss);

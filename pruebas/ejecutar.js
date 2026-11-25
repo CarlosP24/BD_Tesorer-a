@@ -14,12 +14,14 @@ const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
 const contexto = vm.createContext({ console: console });
-vm.runInContext("var CONFIG = { TITULAR_CUENTA: 'Juventudes Marianas Vicencianas España' };", contexto);
 
 fs.readdirSync(raiz).filter(f => /^\d\d_.*\.js$/.test(f)).sort().forEach(f => {
   const fuente = fs.readFileSync(path.join(raiz, f), 'utf8').replace(/^const /gm, 'var ');
   vm.runInContext(fuente, contexto, { filename: f });
 });
+
+// Sin hoja Ajustes: la configuración del centro, fija.
+vm.runInContext("CONFIG_FIJA.TITULAR_CUENTA = 'Juventudes Marianas Vicencianas España';", contexto);
 
 const r = vm.runInContext('pruebasTesoreria()', contexto);
 console.log(r.fallos.length ? `Fallan ${r.fallos.length} de ${r.total}:\n\n` + r.fallos.join('\n') : `Los ${r.total} casos correctos.`);

@@ -184,7 +184,7 @@ var TITULOS = {
   transferencia: ['Nuevo gasto por transferencia', 'Apúntalo aquí antes de ordenarlo en la app del banco.'],
   pendientes: ['Transferencias pendientes', 'Apuntadas pero que todavía no han salido del banco.'],
   completar: ['Movimientos del banco por completar', 'Gastos que han llegado con el extracto y no tienen partida: sobre todo, pagos con tarjeta.'],
-  facturas: ['Facturas que faltan', 'Gastos sin factura adjunta.'],
+  facturas: ['Facturas que faltan', 'Gastos sin factura adjunta. Si alguno no la necesita (un movimiento entre cuentas de JMV, una devolución), márcalo aquí.'],
   efectivo: ['Ingreso o gasto en efectivo', 'Lo que entra o sale de la caja de efectivo.']
 };
 var LISTAS = { pendientes: true, completar: true, facturas: true };
@@ -407,19 +407,55 @@ function rellenarSubpartidas(id, partida, actual) {
   s.disabled = !subs.length && !actual;
 }
 
+/* Un gasto sin factura de verdad puede marcarse como que no la necesita
+   (movimiento entre cuentas de JMV, devolución): va en la celda Factura. */
 function zonaFactura(a) {
   var tiene = a && a.factura;
+  var motivo = (a && a.sinFactura) || '';
   var enlace = tiene ? '<div class="elegido">Factura actual: <a href="' + esc(a.factura) + '" target="_blank">abrir</a>. Si subes otra, el asiento apuntará a la nueva.</div>' : '';
-  var sinCarpeta = D.config.facturas ? '' : '<div class="aviso">Falta CARPETA_FACTURAS en Config.js: no se pueden subir facturas.</div>';
-  return '<fieldset><legend>Factura</legend>' + sinCarpeta + enlace
+  var sinCarpeta = D.config.facturas ? '' : '<div class="aviso">Falta la carpeta de facturas en la hoja Ajustes: no se pueden subir facturas.</div>';
+  var opciones = '';
+  if (!tiene) {
+    var xs = [{ valor: '', texto: 'Lleva factura: súbela ahora o más tarde' }].concat(D.sinFactura.map(function (m) {
+      return { valor: m.valor, texto: 'No necesita factura: ' + m.motivo.charAt(0).toLowerCase() + m.motivo.slice(1) };
+    }));
+    if (motivo && !xs.some(function (x) { return x.valor === motivo; })) xs.push({ valor: motivo, texto: motivo });
+    opciones = '<div class="tipos" id="tiposFactura">' + xs.map(function (x) {
+      var marcado = x.valor === motivo;
+      return '<label' + (marcado ? ' class="sel"' : '') + '><input type="radio" name="sf" value="' + esc(x.valor) + '"'
+        + (marcado ? ' checked' : '') + '>' + esc(x.texto) + '</label>';
+    }).join('') + '</div>';
+  }
+  return '<fieldset><legend>Factura</legend>' + opciones + '<div id="conFactura"' + (motivo ? ' hidden' : '') + '>' + sinCarpeta + enlace
     + '<div class="zona" id="zona">Arrastra aquí la factura o <b>pulsa para elegirla</b> (PDF o foto)'
     + '<input type="file" id="ficheroFactura" accept=".pdf,application/pdf,image/*" hidden></div>'
     + '<div class="elegido" id="elegido"></div>'
-    + '<div class="ayuda" style="margin-top:6px">Se guarda en la carpeta de facturas del ejercicio con el ID del asiento como nombre.</div></fieldset>';
+    + '<div class="ayuda" style="margin-top:6px">Se guarda en la carpeta de facturas del ejercicio con el ID del asiento como nombre.</div></div>'
+    + '<div class="ayuda" id="ayudaSinFactura"' + (motivo ? '' : ' hidden') + '>Este gasto no pedirá factura: no saldrá en «Facturas que faltan» '
+    + 'ni en los pagos sin factura de los informes. En la hoja, su columna Factura dirá «' + esc(motivo || (D.sinFactura[0] || {}).valor || '') + '».</div></fieldset>';
+}
+/* El motivo elegido para no llevar factura; '' si lleva; null si no hay opciones (ya tiene factura). */
+function valSinFactura() {
+  var r = document.querySelector('input[name=sf]:checked');
+  return r ? r.value : null;
 }
 function montarZonaFactura() {
   var zona = $('zona'), fichero = $('ficheroFactura');
   if (!zona) return;
+  document.querySelectorAll('#tiposFactura input').forEach(function (r) {
+    r.addEventListener('change', function () {
+      var motivo = valSinFactura() || '';
+      document.querySelectorAll('#tiposFactura label').forEach(function (l) { l.classList.toggle('sel', l.querySelector('input').checked); });
+      $('conFactura').hidden = !!motivo;
+      $('ayudaSinFactura').hidden = !motivo;
+      if (motivo) {
+        $('ayudaSinFactura').innerHTML = 'Este gasto no pedirá factura: no saldrá en «Facturas que faltan» ni en los pagos sin factura de los informes. '
+          + 'En la hoja, su columna Factura dirá «' + esc(motivo) + '».';
+        if (archivo) { archivo = null; fichero.value = ''; $('elegido').innerHTML = ''; }
+      }
+      marcarCambios();
+    });
+  });
   function elegir(f) {
     archivo = f || null;
     $('elegido').innerHTML = archivo ? '📎 <b>' + esc(archivo.name) + '</b> (' + Math.round(archivo.size / 1024) + ' KB) · se sube al guardar · '
@@ -604,7 +640,7 @@ function vistaAsunto() {
 function guardarNuevaTransferencia() {
   var datos = { fecha: val('f_fecha'), importe: val('f_importe'), proveedor: val('f_proveedor'), cif: val('f_cif'),
     cuentaAbono: val('f_iban'), titular: val('f_titular'), partida: partidaDe('f_partida'), subpartida: val('f_subpartida'),
-    descripcion: val('f_descripcion'), asunto: val('f_asunto') };
+    descripcion: val('f_descripcion'), asunto: val('f_asunto'), sinFactura: valSinFactura() || '' };
   if (!datos.partida && val('f_partida')) { resultado('error', 'Elige la partida de la lista', ['«' + val('f_partida') + '» no es ninguna partida.']); return; }
   if (datos.cuentaAbono && !ibanValido(datos.cuentaAbono)) { resultado('error', 'Revisa el IBAN', ['El IBAN no es válido: falta algún dígito o hay una errata.']); return; }
   enviar('Apuntando el gasto…', 'guardarTransferencia', datos, function (r) {
@@ -681,7 +717,7 @@ function pintarAsiento(c, a) {
       + '</div></fieldset>';
   }
   var factura = a.metodo === 'Cargo bancario' ? '' : zonaFactura(a);
-  var arriba = S === 'facturas' ? factura : (a.faltaFactura ? '<div class="aviso">Este gasto no tiene factura: puedes subirla abajo.</div>' : '');
+  var arriba = S === 'facturas' ? factura : (a.faltaFactura ? '<div class="aviso">Este gasto no tiene factura: súbela abajo o, si no la necesita, márcalo allí.</div>' : '');
   c.innerHTML = '<div id="resultado" hidden></div>' + arriba + pend + banco
     + '<fieldset><legend>Imputación</legend><div class="rejilla">'
     + campo('f_partida', 'Partida', combo('f_partida', 'Código o nombre'))
@@ -709,6 +745,7 @@ function cambiosDe(a) {
     partida: partidaDe('f_partida') || (val('f_partida') ? val('f_partida') : ''),
     subpartida: val('f_subpartida'), descripcion: val('f_descripcion'), proveedor: val('f_proveedor'), cif: val('f_cif')
   };
+  if (valSinFactura() !== null) actual.sinFactura = valSinFactura();
   if (a.pendiente) {
     actual.fecha = val('f_fecha'); actual.importe = val('f_importe');
     actual.cuentaAbono = val('f_iban'); actual.titular = val('f_titular'); actual.asunto = val('f_asunto');
@@ -786,7 +823,18 @@ function pintarEfectivo(c) {
         + (t[0] === tipoEfectivo ? ' checked' : '') + '>' + t[1] + '</label>';
     }).join('') + '</div>'
     + '<fieldset><legend>Cuándo</legend><div class="rejilla">' + campo('e_fecha', 'Fecha en que se cobró o pagó', entrada('e_fecha', val('e_fecha') || D.hoy, 'type="date"')) + '</div></fieldset>';
-  if (tipoEfectivo === 'cuotas') {
+  if (tipoEfectivo === 'cuotas' && !D.config.bdSocios) {
+    h += '<fieldset><legend>Cuotas</legend>'
+      + '<div class="ayuda">Este centro no tiene base de socios conectada: apunta quién paga, su tramo y el importe. '
+      + 'Se crea una fila por persona, con la partida de cuotas de su tramo. Cuando lleves este dinero al banco, '
+      + 'apúntalo como <a href="#" id="irTraspaso">traspaso</a>.</div><div class="rejilla">'
+      + campo('m_nombre', 'Quién paga', entrada('m_nombre', '', 'placeholder="Nombre y apellidos"'))
+      + campo('m_tramo', 'Tramo', '<select id="m_tramo">' + D.tramos.map(function (t) {
+          return '<option value="' + esc(t.partida) + '">' + esc(t.tramo + ' · ' + partidaTexto(t.partida)) + '</option>'; }).join('') + '</select>')
+      + campo('m_importe', 'Importe (€)', entrada('m_importe', '', 'inputmode="decimal" placeholder="20,00"'))
+      + '</div><div style="margin-top:8px"><button id="m_anadir">Añadir a la lista</button></div>'
+      + '<div id="tablaCuotas"></div></fieldset>';
+  } else if (tipoEfectivo === 'cuotas') {
     h += '<fieldset><legend>Socios</legend>'
       + '<div class="ayuda">Una fila por socio, con su ID: así la cuota se apunta como pagada en BD Socios (se sincroniza al guardar). '
       + 'Cuando lleves este dinero al banco, apúntalo como <a href="#" id="irTraspaso">traspaso</a>.</div>'
@@ -802,7 +850,8 @@ function pintarEfectivo(c) {
       + campo('f_descripcion', 'Descripción', entrada('f_descripcion', '', gasto ? 'placeholder="Qué se ha comprado"' : 'placeholder="De qué es el ingreso"'), { ancho: true })
       + '</div></fieldset>'
       + (gasto ? '<fieldset><legend>Proveedor</legend><div class="rejilla">' + camposProveedor({}, false) + '</div></fieldset>' + zonaFactura(null) : '')
-      + (gasto ? '' : '<div class="ayuda">¿Es la cuota de un socio? Usa «Cuotas cobradas en mano»: así se apunta también en BD Socios.</div>');
+      + (gasto ? '' : '<div class="ayuda">¿Es la cuota de un socio? Usa «Cuotas cobradas en mano»'
+        + (D.config.bdSocios ? ': así se apunta también en BD Socios.' : '.') + '</div>');
   }
   c.innerHTML = h;
   $('guardar').textContent = tipoEfectivo === 'cuotas' ? 'Apuntar las cuotas' : 'Apuntar';
@@ -814,8 +863,17 @@ function pintarEfectivo(c) {
   });
   if (tipoEfectivo === 'cuotas') {
     $('irTraspaso').addEventListener('click', function (ev) { ev.preventDefault(); irA('traspaso'); });
-    $('buscarSocio').addEventListener('focus', cargarSocios);
-    $('buscarSocio').addEventListener('input', pintarSocios);
+    if (D.config.bdSocios) {
+      $('buscarSocio').addEventListener('focus', cargarSocios);
+      $('buscarSocio').addEventListener('input', pintarSocios);
+    } else {
+      $('m_anadir').addEventListener('click', function () {
+        if (!val('m_nombre') || !numero(val('m_importe'))) { estado('Escribe quién paga y el importe.', true); return; }
+        cuotas.push({ idSocio: '', nombre: val('m_nombre'), partida: $('m_tramo').value, importe: val('m_importe') });
+        $('m_nombre').value = ''; $('m_importe').value = ''; $('m_nombre').focus();
+        pintarCuotas();
+      });
+    }
     pintarCuotas();
   } else {
     montarComboPartida('f_partida', tipoEfectivo === 'gasto' ? 'G' : 'I', '', function (p) { rellenarSubpartidas('f_subpartida', p, ''); });
@@ -828,7 +886,7 @@ function cargarSocios() {
   if (socios) return;
   $('resultadosSocio').hidden = false;
   if (!D.config.bdSocios) {
-    $('resultadosSocio').innerHTML = '<div class="socio">Falta ID_BD_SOCIOS en Config.js: no se puede buscar por nombre. '
+    $('resultadosSocio').innerHTML = '<div class="socio">Falta la base de socios en la hoja Ajustes: no se puede buscar por nombre. '
       + 'Escribe el ID de socio (JMV-000000) y pulsa «Apuntar las cuotas».</div>';
     return;
   }
@@ -872,7 +930,7 @@ function pintarCuotas() {
   var t = $('tablaCuotas');
   if (!cuotas.length) { t.innerHTML = '<div class="ayuda" style="margin-top:10px">Todavía no has añadido a nadie.</div>'; estado(''); return; }
   var total = cuotas.reduce(function (s, c) { return s + numero(c.importe); }, 0);
-  t.innerHTML = '<table class="tabla"><tr><th>Socio</th><th>Partida</th><th>Importe (€)</th><th></th></tr>'
+  t.innerHTML = '<table class="tabla"><tr><th>' + (D.config.bdSocios ? 'Socio' : 'Quién paga') + '</th><th>Partida</th><th>Importe (€)</th><th></th></tr>'
     + cuotas.map(function (c, i) {
       return '<tr><td><b>' + esc(c.nombre) + '</b> <span class="sub" style="color:#667">' + esc(c.idSocio) + '</span>'
         + (c.aviso ? '<div class="naranja" style="font-size:11.5px">⚠ ' + esc(c.aviso) + '</div>' : '') + '</td>'
@@ -892,18 +950,19 @@ function pintarCuotas() {
 function guardarEfectivoAhora() {
   var datos = { tipo: tipoEfectivo, fecha: val('e_fecha') };
   if (tipoEfectivo === 'cuotas') {
-    var escrito = val('buscarSocio');
+    var escrito = D.config.bdSocios ? val('buscarSocio') : '';
     if (!cuotas.length && /^jmv-?\d+$/i.test(escrito)) {
       var n = escrito.replace(/\D/g, '');
       cuotas.push({ idSocio: 'JMV-' + ('000000' + n).slice(-6), nombre: '', importe: '', partida: '' });
       pintarCuotas();
       resultado('info', 'Pon el importe de la cuota y vuelve a pulsar «Apuntar las cuotas».'); return;
     }
-    datos.cuotas = cuotas.map(function (c) { return { idSocio: c.idSocio, importe: c.importe, partida: c.partida }; });
+    datos.cuotas = cuotas.map(function (c) { return { idSocio: c.idSocio, nombre: c.nombre, importe: c.importe, partida: c.partida }; });
   } else {
     if (val('f_partida') && !partidaDe('f_partida')) { resultado('error', 'Elige la partida de la lista', ['«' + val('f_partida') + '» no es ninguna partida.']); return; }
     datos.importe = val('e_importe'); datos.partida = partidaDe('f_partida'); datos.subpartida = val('f_subpartida');
     datos.descripcion = val('f_descripcion'); datos.proveedor = val('f_proveedor'); datos.cif = val('f_cif');
+    if (tipoEfectivo === 'gasto') datos.sinFactura = valSinFactura() || '';
   }
   enviar(tipoEfectivo === 'cuotas' && D.config.bdSocios ? 'Apuntando y sincronizando con BD Socios…' : 'Apuntando…', 'guardarEfectivo', datos, function (r) {
     cuotas = []; archivo = null; socios = null;

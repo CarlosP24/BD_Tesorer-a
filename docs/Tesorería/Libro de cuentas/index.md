@@ -27,7 +27,7 @@ Son cortas:
 1. [La contabilidad, sin miedo](conceptos.md): las seis o siete ideas que
    necesitas (asiento, partida, saldo, traspaso…), explicadas con ejemplos.
 2. [Primeros pasos con el libro](primeros-pasos.md): dónde está el archivo, qué
-   es cada pestaña, el menú **Tesorería** y qué significan los colores.
+   es cada pestaña, el menú y el panel de **Tesorería**, cómo autorizar el programa la primera vez y qué significan los colores.
 
 Después, consulta cada guía cuando te toque hacer esa tarea.
 
@@ -52,5 +52,11 @@ funciona:
     **completa después** lo que solo aparece al importar el extracto (tarjeta,
     recibos, comisiones). Si sigues esa regla, el libro cuadra solo con el
     banco.
+
+## Para el equipo nacional
+
+La [consola nacional](consola-nacional.md) reúne a todos los centros y áreas:
+cómo va cada uno, los libros de cada curso, el informe nacional y el cierre
+del ejercicio.
 
 <br>

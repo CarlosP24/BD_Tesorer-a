@@ -39,10 +39,11 @@ const FILTRO = process.argv[2] || '';
 // ==================================================================
 
 const G = vm.createContext({ console });
-vm.runInContext("var CONFIG = { TITULAR_CUENTA: 'Asociacion De Ejemplo', NOMBRE_CENTRO: 'Centro JMV de ejemplo', "
-  + "CARPETA_FACTURAS: 'x', ID_BD_SOCIOS: 'x' };", G);
 fs.readdirSync(RAIZ).filter(f => /^\d\d_.*\.js$/.test(f)).sort().forEach(f =>
   vm.runInContext(fs.readFileSync(path.join(RAIZ, f), 'utf8').replace(/^const /gm, 'var '), G, { filename: f }));
+// Sin hoja Ajustes: la configuración del centro, fija.
+Object.assign(G.CONFIG_FIJA, { TITULAR_CUENTA: 'Asociacion De Ejemplo', NOMBRE_CENTRO: 'Centro JMV de ejemplo',
+  CARPETA_FACTURAS: 'x', ID_BD_SOCIOS: 'x' });
 // Las fechas se crean dentro del contexto: si no, `instanceof Date` falla.
 const D = vm.runInContext('(d, m, a, h) => new Date(a, m - 1, d, h || 0)', G);
 const json = x => JSON.parse(JSON.stringify(x));
@@ -401,6 +402,88 @@ function hoja(op) {
   return path.join(TMP, nombre);
 }
 
+/** La hoja con el panel lateral abierto a la derecha, como en Sheets. */
+function hojaConPanel() {
+  const hojaUrl = hoja(Object.assign(vistaCaja(PRINCIPALES.slice(0, 5), { indices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] })));
+  const estado = Object.assign({ libro: true, centro: 'Centro JMV de ejemplo', bdSocios: true, reparar: false,
+    ultimoExtracto: '01/10/2026 – 16/10/2026 (importado el 18/10/2026)' }, json(G.resumenDelLibro(CAJA_FILAS, INICIALES, AJ)));
+  const panelUrl = ventana('Panel', {}, { estadoDelPanel: estado });
+  const nombre = path.join(TMP, `panel-${++contador}.html`);
+  fs.writeFileSync(nombre, `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+    <body style="margin:0"><div id="todo" style="display:flex;background:#f9fbfd;width:1130px">
+    <iframe src="${path.basename(hojaUrl)}" width="790" height="780" style="border:0"></iframe>
+    <div style="width:340px;border-left:1px solid #c4c7c5;background:#fff">
+      <div style="display:flex;justify-content:space-between;padding:14px 16px 8px;font:18px 'Google Sans',Arial,sans-serif;color:#1f1f1f">Tesorería<span>✕</span></div>
+      <iframe src="${path.basename(panelUrl)}" width="340" height="730" style="border:0"></iframe>
+    </div></div></body></html>`);
+  return nombre;
+}
+
+// ==================================================================
+// LA CONSOLA NACIONAL (recreación, con centros inventados)
+// ==================================================================
+
+const PESTANAS_CONSOLA = ['Centros', 'Informe nacional', 'Ajustes de la consola'];
+const ESTADO_EJEMPLO = G.resumenDelLibro(CAJA_FILAS, INICIALES, AJ);
+// Los otros centros son el de ejemplo a escala, igual que en vistaInformeNacional().
+const ESCALA_CENTROS = { 'Centro de Valdemar': 0.7, 'Área de Formación': 0.3 };
+const aEscala = (v, centro) => Math.round(v * ESCALA_CENTROS[centro] * 100) / 100;
+const CENTROS_EJEMPLO = [
+  { 'Centro': 'Centro JMV de ejemplo', 'Activo': 'Sí', 'Ejercicio': CURSO, 'Estructura': G.VERSION_ESTRUCTURA,
+    'Banco': ESTADO_EJEMPLO.saldos.banco, 'Efectivo': ESTADO_EJEMPLO.saldos.efectivo, 'Pendientes': ESTADO_EJEMPLO.pendientes,
+    'Por completar': ESTADO_EJEMPLO.completar, 'Sin factura': ESTADO_EJEMPLO.facturas, 'Errores': '✔' },
+  { 'Centro': 'Centro de Valdemar', 'Activo': 'Sí', 'Ejercicio': CURSO, 'Estructura': G.VERSION_ESTRUCTURA,
+    'Banco': aEscala(ESTADO_EJEMPLO.saldos.banco, 'Centro de Valdemar'), 'Efectivo': aEscala(ESTADO_EJEMPLO.saldos.efectivo, 'Centro de Valdemar'), 'Pendientes': 0, 'Por completar': 1, 'Sin factura': 2, 'Errores': '✔' },
+  { 'Centro': 'Área de Formación', 'Activo': 'Sí', 'Ejercicio': CURSO, 'Estructura': G.VERSION_ESTRUCTURA - 1,
+    'Banco': aEscala(ESTADO_EJEMPLO.saldos.banco, 'Área de Formación'), 'Efectivo': aEscala(ESTADO_EJEMPLO.saldos.efectivo, 'Área de Formación'), 'Pendientes': 0, 'Por completar': 0, 'Sin factura': 0,
+    'Errores': `✖ 1: La estructura del libro es de la versión ${G.VERSION_ESTRUCTURA - 1} y el programa espera la ${G.VERSION_ESTRUCTURA}…` },
+  { 'Centro': 'Centro Las Lomas', 'Activo': 'No' },
+  { 'Centro': 'Centro San Marcos', 'Activo': 'No' }
+];
+const COLS_CONSOLA = [['Centro', 165], ['Activo', 58], ['Ejercicio', 82], ['Estructura', 78], ['Banco', 92], ['Efectivo', 82],
+  ['Pendientes', 82], ['Por completar', 92], ['Sin factura', 80], ['Errores', 210]];
+
+function vistaCentros(op) {
+  const letra = c => G.letraDeColumna(G.colConsola(c));
+  const cab = { n: 1, alto: 34, celdas: COLS_CONSOLA.map(c => ({ t: c[0], fondo: '#6075BB', color: '#fff', negrita: true, ajustar: true })) };
+  const filas = [cab].concat(CENTROS_EJEMPLO.map((x, i) => ({ n: i + 2, celdas: COLS_CONSOLA.map(c => {
+    const v = x[c[0]];
+    if (v === undefined || v === '') return null;
+    const celda = { t: typeof v === 'number' && ['Banco', 'Efectivo'].indexOf(c[0]) >= 0 ? euros(v) : String(v) };
+    if (typeof v === 'number') celda.alinear = 'right';
+    if (c[0] === 'Errores' && String(v).charAt(0) === '✖') celda.color = '#b00020';
+    if (c[0] === 'Activo') celda.chip = true;
+    return celda;
+  }) })));
+  for (let k = filas.length + 1; k <= 12; k++) filas.push({ n: k, celdas: [] });
+  return Object.assign({ titulo: 'Consola nacional de Tesorería', columnas: COLS_CONSOLA.map(c => ({ letra: letra(c[0]), ancho: c[1] })),
+    fijas: 1, filasFijas: 1, filas: filas, pestañas: PESTANAS_CONSOLA, activa: 'Centros', celda: 'B4', formula: 'Sí' }, op || {});
+}
+
+function vistaInformeNacional() {
+  const rn = G.resumenNacional(CAJA_FILAS, PARTIDAS, INICIALES, D(25, 11, 2026, 23));
+  const v1 = json(G.valoresDelInformeNacional(rn));
+  const escala = (v, f) => { const r = {}; Object.keys(v).forEach(k => { r[k] = Math.round(v[k] * f * 100) / 100; }); return r; };
+  const centros = [['Centro JMV de ejemplo', v1], ['Centro de Valdemar', escala(v1, ESCALA_CENTROS['Centro de Valdemar'])],
+    ['Área de Formación', escala(v1, ESCALA_CENTROS['Área de Formación'])]];
+  const filasInf = G.filasDelInformeNacional();
+  const filas = [
+    { n: 1, celdas: [{ t: `Informe nacional · Ejercicio ${CURSO} · movimientos hasta el 25/11/2026 (criterio de caja) · sin las transferencias pendientes`, negrita: true, desborda: true }] },
+    { n: 2, celdas: [] },
+    { n: 3, alto: 34, celdas: ['Concepto'].concat(centros.map(c => c[0]), ['Total']).map(t => ({ t: t, fondo: '#6075BB', color: '#fff', negrita: true, ajustar: true })) }
+  ];
+  filasInf.forEach((f, i) => {
+    const celdas = [{ t: f.etiqueta, negrita: !!f.titulo }];
+    let total = 0;
+    centros.forEach(c => { const x = f.titulo ? '' : (c[1][f.clave] || 0); if (x !== '') total += x; celdas.push(f.titulo ? null : { t: euros(x), alinear: 'right' }); });
+    celdas.push(f.titulo ? null : { t: euros(total), alinear: 'right', negrita: true });
+    if (f.titulo) celdas.forEach((c, k) => { celdas[k] = Object.assign(c || { t: '' }, { fondo: '#EEF0F8' }); });
+    filas.push({ n: 4 + i, celdas: celdas });
+  });
+  return { titulo: 'Consola nacional de Tesorería', columnas: 'ABCDE'.split('').map((l, i) => ({ letra: l, ancho: [300, 118, 118, 118, 118][i] })),
+    fijas: 1, filasFijas: 3, filas: filas, pestañas: PESTANAS_CONSOLA, activa: 'Informe nacional', celda: 'A3', formula: 'Concepto' };
+}
+
 // ==================================================================
 // EL INFORME EN PDF
 // ==================================================================
@@ -465,6 +548,7 @@ const CAPTURAS = [
       script: "llamada(1, '#menuTesoreria', 100, -2); llamada(2, '#c_E1', 10, 18); llamada(3, '#c_C3', 160, 5); llamada(4, '#c_F9', 25, 20); llamada(5, '.pestanas .p:last-child', 60, 2);" })),
     recorte: ['#pantalla'] },
   { archivo: 'primeros-pasos/02.png', url: () => hoja(Object.assign(menu(null, 20))), recorte: ['.arriba', '.menu'], margen: 10 },
+  { archivo: 'primeros-pasos/04.png', url: hojaConPanel, recorte: ['#todo'], principal: true },
   { archivo: 'primeros-pasos/03.png', url: () => hoja(vistaCaja(['ID Transacción', 'Fecha', 'Cantidad', 'Saldo', 'Factura', 'Método de pago',
       'Cuenta de abono', 'Titular', 'Fecha de pago'], { celda: 'P16', formula: 'Pendiente' })), recorte: ['#pantalla'] },
 
@@ -563,6 +647,12 @@ const CAPTURAS = [
   { archivo: 'facturas/03.png', url: () => asientos('facturas', '20261012-01'),
     pasos: async f => { const i = await f.$('#ficheroFactura'); await i.uploadFile(archivoDePrueba('Factura autocares octubre.pdf')); },
     recorte: ['fieldset:has(#zona)'], margen: 8 },
+  { archivo: 'facturas/04.png', url: () => asientos('transferencia'),
+    pasos: async f => {
+      const opciones = await f.$$('#tiposFactura label');
+      await opciones[2].click();
+      await f.evaluate(() => document.getElementById('tiposFactura').scrollIntoView({ block: 'center' }));
+    }, recorte: ['fieldset:has(#tiposFactura)'], margen: 8 },
 
   // --- Efectivo y traspasos ---
   { archivo: 'efectivo/01.png', url: () => hoja(menu('⇄ Traspaso entre banco y efectivo…')), recorte: ['.arriba', '.menu .op.res'], margen: 6 },
@@ -612,6 +702,16 @@ const CAPTURAS = [
   { archivo: 'actividades/03.png', url: () => hoja(vistaPresupuesto(false)), recorte: ['#pantalla'] },
   { archivo: 'actividades/04.png', url: () => hoja(vistaPresupuesto(true)), recorte: ['#pantalla'] },
 
+  // --- Consola nacional ---
+  { archivo: 'consola-nacional/01.png', url: () => hoja(vistaCentros()), recorte: ['#pantalla'] },
+  { archivo: 'consola-nacional/02.png', alto: 1150, url: () => {
+      const entradas = G.entradasDelMenu(true);
+      const sub = entradas[entradas.length - 1];
+      return hoja(vistaCentros({ menu: { entradas: entradas, resaltar: 'Consola nacional',
+        sub: { titulo: 'Consola nacional', entradas: sub.entradas, resaltar: 'Crear los libros que falten del ejercicio…' } } }));
+    }, recorte: ['.arriba', '#menuTes', '#menuSub'], margen: 8 },
+  { archivo: 'consola-nacional/03.png', alto: 1300, url: () => hoja(vistaInformeNacional()), recorte: ['#pantalla'] },
+
   // --- Informes ---
   { archivo: 'informes/01.png', url: () => ventana('Informes', { datos: JSON.stringify({ ejercicio: CURSO, fin: '2027-08-31', hoy: '2026-11-25',
       actividades: [{ nombre: ACTIVIDAD.nombre, titulo: ACTIVIDAD.titulo }] }) }, {
@@ -657,7 +757,8 @@ async function recortar(page, frame, c) {
     await page.setViewport({ width: c.ancho || 1250, height: c.alto || (modal ? 900 : 1000), deviceScaleFactor: 2 });
     await page.goto('file://' + c.url(), { waitUntil: 'load' });
     await espera(500);
-    const frame = c.recorte === 'modal' || (page.frames().length > 1) ? page.frames().find(f => f !== page.mainFrame()) || page.mainFrame() : page.mainFrame();
+    const frame = c.principal ? page.mainFrame() : c.recorte === 'modal' || (page.frames().length > 1)
+      ? page.frames().find(f => f !== page.mainFrame()) || page.mainFrame() : page.mainFrame();
     if (c.pasos) await c.pasos(frame, page);
     await espera(700);
     const destino = path.join(IMG, c.archivo);

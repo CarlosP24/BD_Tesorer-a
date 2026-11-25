@@ -95,6 +95,15 @@ const CAJA = {
   // reconoce por el ID en el concepto y toma la fecha del banco.
   PENDIENTE: 'Pendiente',
 
+  // Valor de «Factura» de un gasto que por su naturaleza no lleva factura
+  // (decisión de tesorería): movimientos entre cuentas de JMV y
+  // devoluciones a familias o particulares. Se marca en la ventana de
+  // asientos o se escribe a mano: basta con que empiece por «No requiere»
+  // (noRequiereFactura()). Cuenta como si tuviera factura: no sale en
+  // «Facturas que faltan», ni en amarillo, ni en «Pagos sin factura».
+  SIN_FACTURA: 'No requiere',
+  MOTIVOS_SIN_FACTURA: ['Movimiento entre cuentas de JMV', 'Devolución a una familia o particular'],
+
   // Los desplegables de Partida y Subpartida ofrecen «G21 · Convivencia»
   // para poder buscar por el nombre; al elegir, onEdit deja solo el
   // código (codigoDeOpcion()). Por eso los códigos solos también están
@@ -129,13 +138,18 @@ const PRESUPUESTO = {
   CABECERA: ['Partida ingresos', 'Sección', 'Descripción', 'Importe presupuestado',
              'Partida gastos', 'Sección', 'Descripción', 'Importe presupuestado'],
 
-  // Siembra del primer ejercicio. Genérica a propósito: las campañas
-  // concretas de cada año se añaden como partidas nuevas (I32, G32…),
-  // también a mitad de curso.
+  // Siembra del primer ejercicio y, a la vez, el PLAN DE PARTIDAS COMÚN de
+  // JMV España (09_Nacional.js): todos los centros las tienen, con el mismo
+  // código, y el informe nacional suma por ellas. Las de cada centro
+  // (actividades, campañas: I23, G32…) se añaden encima, también a mitad
+  // de curso, y en el informe nacional cuentan en la común de su sección
+  // (NACIONAL.POR_DEFECTO). Cambiar esta lista cambia el plan de todos los
+  // centros: es una decisión del equipo nacional.
   INGRESOS: [
     ['I11', 'Cuotas infantiles (10-15)'],
     ['I12', 'Cuotas PD (16-30)'],
     ['I13', 'Cuotas adultos (31+)'],
+    ['I14', 'Otros ingresos de operaciones'],
     ['I21', 'Actividades de centro'],
     ['I22', 'Actividades JMV externas'],
     ['I31', 'Campañas de financiación'],
@@ -164,21 +178,195 @@ const AJUSTES = {
   ULTIMO_EXTRACTO: 'Último extracto importado',
   PREFIJO_TRAMO: 'Partida de cuotas, tramo ',
   // Tramos de BD Socios (pestaña Cuotas) → partida de ingresos.
-  TRAMOS_POR_DEFECTO: [['10-15', 'I11'], ['16-30', 'I12'], ['31+', 'I13']]
+  TRAMOS_POR_DEFECTO: [['10-15', 'I11'], ['16-30', 'I12'], ['31+', 'I13']],
+  VERSION: 'Versión de la estructura',
+  PROGRAMA: 'Programa (ID del script)'
 };
+
+/**
+ * Lo propio de cada centro. Antes estaba en Config.js (un archivo por
+ * instalación); ahora el código es el mismo en todos los centros (se
+ * despliega igual a todos los libros), así que vive en la hoja Ajustes de
+ * cada libro, que se copia sola al ejercicio siguiente. Clave de config() → [fila de Ajustes, para qué
+ * sirve]. Casi todo se rellena solo (completarConfiguracion()).
+ */
+const CONFIG_EN_AJUSTES = {
+  NOMBRE_CENTRO: ['Centro', 'Nombre del centro, para los informes. Vacío: el de la unidad compartida.'],
+  CODIGO_CENTRO: ['Código del centro', 'Código del centro en JMV España, para los informes.'],
+  ID_BD_SOCIOS: ['BD Socios (archivo)', 'Enlace o ID de la base de datos de socios. Vacío: se busca en la unidad compartida.'],
+  CARPETA_FACTURAS: ['Carpeta de facturas', 'Enlace o ID. Vacío: la carpeta «Facturas» junto a este libro (se crea si no está).'],
+  CARPETA_EXTRACTOS: ['Carpeta de extractos', 'Enlace o ID. Vacío: la carpeta «Extractos» junto a este libro (se crea si no está).'],
+  CARPETA_INFORMES: ['Carpeta de informes', 'Enlace o ID. Vacío: la carpeta «Memorias» junto a este libro (se crea si no está).'],
+  IBAN_CUENTA: ['IBAN de la cuenta', 'Lo pone el primer extracto importado. Evita importar el de otra cuenta.'],
+  TITULAR_CUENTA: ['Titular de la cuenta', 'Lo pone el primer extracto importado. Sirve para reconocer los ingresos de la propia asociación.'],
+  LOGO_INFORME: ['Logo de los informes', 'Opcional: enlace o ID de una imagen PNG o JPG en Drive.']
+};
+
+/**
+ * Versión de la estructura del libro (columnas, fórmulas, validaciones,
+ * listas). Súbela cuando cambie algo de montar*(): el Diagnóstico y la
+ * consola avisan de los libros que tienen una menor, y «Reparar» los pone
+ * al día. El código lo sube el despliegue (DESPLIEGUE.md); la estructura de cada
+ * libro, no.
+ */
+const VERSION_ESTRUCTURA = 4;
 
 /** Prefijo de las protecciones que pone este script: así se reconocen. */
 const PROTECCION = 'Tesorería: ';
 
 
 // ==================================================================
-// CONFIGURACIÓN (Config.js) — siempre por getter, ver CLAUDE.md §3
+// EL LIBRO CON EL QUE SE TRABAJA
+//
+// Casi siempre, el que está abierto. Pero la consola central trabaja con
+// libros que no están abiertos (y en un disparador de complemento no hay
+// libro activo): los abre por su ID y los fija con conLibro().
 // ==================================================================
 
-/** Un valor de Config.js, o '' si el archivo o la clave faltan. */
+const CONTEXTO = { libro: null, ajustes: null, protegidas: null };
+
+function libro() { return CONTEXTO.libro || SpreadsheetApp.getActiveSpreadsheet(); }
+
+/**
+ * El bloqueo para importar, sincronizar o guardar asientos: el del
+ * documento (en un complemento, el del script sería uno solo para todos los
+ * centros). Si no hay documento, el del script.
+ */
+function bloqueo() { return LockService.getDocumentLock() || LockService.getScriptLock(); }
+
+/** Ejecuta fn con `ss` como libro de trabajo. */
+function conLibro(ss, fn) {
+  const antes = CONTEXTO.libro;
+  CONTEXTO.libro = ss;
+  CONTEXTO.ajustes = null;
+  try { return fn(ss); }
+  finally { CONTEXTO.libro = antes; CONTEXTO.ajustes = null; }
+}
+
+
+// ==================================================================
+// CONFIGURACIÓN DEL CENTRO (hoja Ajustes)
+// ==================================================================
+
+/**
+ * Valores fijos para las pruebas en Node y las capturas, que no tienen hoja
+ * Ajustes. En Apps Script se queda vacío.
+ */
+const CONFIG_FIJA = {};
+
+/** Un valor de la configuración del centro, o '' si no está. Nunca falla. */
 function config(clave) {
+  if (CONFIG_FIJA[clave] !== undefined) return String(CONFIG_FIJA[clave]).trim();
+  const fila = CONFIG_EN_AJUSTES[clave];
+  let v = '';
+  try { if (fila) v = String(mapaDeAjustes()[fila[0]] || '').trim(); } catch (e) { v = ''; }
+  if (!v) v = configAntigua(clave);
+  return /^(ID_BD_SOCIOS|CARPETA_|LOGO_)/.test(clave) ? idDeDrive(v) : v;
+}
+
+/**
+ * Config.js de la primera instalación. Solo sirve para pasar sus valores a
+ * Ajustes la primera vez que se repara el libro (completarConfiguracion()).
+ * El despliegue nunca lo lleva.
+ */
+function configAntigua(clave) {
   try { return (CONFIG && CONFIG[clave]) ? String(CONFIG[clave]).trim() : ''; }
   catch (e) { return ''; }   // ReferenceError: no hay Config.js
+}
+
+/** «https://drive.google.com/drive/folders/1AbC…?usp=…» o el ID suelto → el ID. Pura. */
+function idDeDrive(v) {
+  const t = String(v || '').trim();
+  const m = t.match(/\/(?:d|folders)\/([-\w]{20,})/) || t.match(/[?&]id=([-\w]{20,})/) || t.match(/^([-\w]{20,})$/);
+  return m ? m[1] : t;
+}
+
+/** Ajustes como { etiqueta: valor }, leído una vez por ejecución. */
+function mapaDeAjustes() {
+  if (CONTEXTO.ajustes) return CONTEXTO.ajustes;
+  const h = libro().getSheetByName(HOJAS.AJUSTES);
+  const mapa = {};
+  if (h && h.getLastRow() > 1) h.getRange(2, 1, h.getLastRow() - 1, 2).getValues()
+    .forEach(f => { mapa[String(f[0]).trim()] = f[1]; });
+  CONTEXTO.ajustes = mapa;
+  return mapa;
+}
+
+/**
+ * Rellena en Ajustes lo que falte de la configuración del centro, sin
+ * tocar lo que ya tenga: lo de un Config.js antiguo, el nombre de la unidad
+ * compartida, las carpetas de Tesorería junto al libro (creándolas si no
+ * están) y la base de socios de la misma unidad. Devuelve qué ha puesto.
+ */
+function completarConfiguracion(ss) {
+  const puesto = [];
+  const poner = (clave, valor, como) => {
+    if (!valor) return;
+    escribirAjuste(ss, CONFIG_EN_AJUSTES[clave][0], valor, CONFIG_EN_AJUSTES[clave][1]);
+    puesto.push(`${CONFIG_EN_AJUSTES[clave][0]}: ${como || valor}`);
+  };
+  const tiene = clave => conLibro(ss, () => !!config(clave));
+  const vacia = clave => conLibro(ss, () => !String(mapaDeAjustes()[CONFIG_EN_AJUSTES[clave][0]] || '').trim());
+
+  // 1. Lo que hubiera en un Config.js de la primera instalación.
+  Object.keys(CONFIG_EN_AJUSTES).forEach(k => { if (vacia(k) && configAntigua(k)) poner(k, configAntigua(k), 'de Config.js'); });
+
+  // 2. Lo que se deduce de dónde está el libro.
+  let info = null;
+  try { info = Drive.Files.get(ss.getId(), { fields: 'driveId,parents', supportsAllDrives: true }); }
+  catch (e) { return puesto; }   // sin el servicio de Drive no se puede deducir nada más
+  if (info.driveId && !tiene('NOMBRE_CENTRO')) {
+    try { poner('NOMBRE_CENTRO', Drive.Drives.get(info.driveId).name); } catch (e) { /* sin acceso a la unidad */ }
+  }
+  const padre = info.parents && info.parents[0] ? DriveApp.getFolderById(info.parents[0]) : null;
+  if (padre) {
+    [['CARPETA_FACTURAS', ['Facturas']], ['CARPETA_EXTRACTOS', ['Extractos']], ['CARPETA_INFORMES', ['Memorias', 'Informes']]]
+      .forEach(x => {
+        if (tiene(x[0])) return;
+        const carpeta = carpetaHermana(padre, x[1]);
+        poner(x[0], carpeta.getUrl(), `«${carpeta.getName()}»`);
+      });
+  }
+  if (info.driveId && !tiene('ID_BD_SOCIOS')) {
+    const bd = buscarBdSocios(info.driveId, ss.getId());
+    if (bd) poner('ID_BD_SOCIOS', bd.getUrl(), `«${bd.getName()}»`);
+  }
+  return puesto;
+}
+
+/** La subcarpeta de `padre` con alguno de esos nombres (sin mayúsculas ni tildes); si no hay, se crea con el primero. */
+function carpetaHermana(padre, nombres) {
+  const buscados = nombres.map(normalizarTexto);
+  const it = padre.getFolders();
+  while (it.hasNext()) {
+    const c = it.next();
+    if (buscados.indexOf(normalizarTexto(c.getName())) >= 0) return c;
+  }
+  return padre.createFolder(nombres[0]);
+}
+
+/**
+ * La base de datos de socios de una unidad compartida: una hoja de cálculo
+ * que se llama como una (socios, base de datos, BD) y tiene las pestañas
+ * que este proyecto lee (SOCIOS.COLUMNAS). Solo se abren las que se llaman
+ * así: abrir todas las hojas de la unidad es lento, y casi ningún centro
+ * tiene base de socios. Si se llama de otra forma, se pega a mano en Ajustes.
+ */
+function buscarBdSocios(idUnidad, idPropio) {
+  let archivos = [];
+  try {
+    archivos = Drive.Files.list({ q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+      corpora: 'drive', driveId: idUnidad, includeItemsFromAllDrives: true, supportsAllDrives: true,
+      pageSize: 100, fields: 'files(id,name)' }).files || [];
+  } catch (e) { return null; }
+  const candidatos = archivos.filter(f => f.id !== idPropio && /socios|base de datos|\bbd\b/i.test(f.name)).slice(0, 4);
+  for (const f of candidatos) {
+    try {
+      const bd = SpreadsheetApp.openById(f.id);
+      if (Object.keys(SOCIOS.COLUMNAS).every(t => bd.getSheetByName(t))) return bd;
+    } catch (e) { /* sin acceso: siguiente */ }
+  }
+  return null;
 }
 
 
@@ -187,7 +375,7 @@ function config(clave) {
 // ==================================================================
 
 function crearEstructura() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const ui = SpreadsheetApp.getUi();
 
   let anio = ss.getSheetByName(HOJAS.AJUSTES) ? null : anioPropuesto(ss.getName(), new Date());
@@ -203,41 +391,52 @@ function crearEstructura() {
       if (!(anio > 2000 && anio < 2100)) { ui.alert('Ese año no es válido.'); return; }
     }
   }
-
-  ss.setSpreadsheetTimeZone('Europe/Madrid');
-  ss.setSpreadsheetLocale('es_ES');
-
-  // Primero todas las hojas, vacías: las fórmulas de unas se refieren a
-  // otras, y una fórmula que apunta a una hoja que todavía no existe se
-  // queda en #REF! aunque la hoja aparezca después.
-  const nuevas = {};
-  [HOJAS.CAJA, HOJAS.PRESUPUESTO, HOJAS.CUENTAS, HOJAS.AJUSTES, HOJAS.LOG, HOJAS.LISTAS]
-    .forEach(nombre => {
-      if (!ss.getSheetByName(nombre)) { ss.insertSheet(nombre); nuevas[nombre] = true; }
-    });
-
-  if (nuevas[HOJAS.AJUSTES]) sembrarAjustes(ss, anio);
-  if (nuevas[HOJAS.PRESUPUESTO]) sembrarPresupuesto(ss);
-  if (nuevas[HOJAS.LOG]) ss.getSheetByName(HOJAS.LOG).getRange(1, 1, 1, 4)
-    .setValues([['Fecha', 'Nivel', 'Mensaje', 'Detalle']]).setFontWeight('bold');
-
-  // La hoja que trae un Sheet nuevo ("Hoja 1"), si sigue vacía.
-  ss.getSheets().forEach(h => {
-    if (Object.values(HOJAS).indexOf(h.getName()) === -1 && !esHojaDeActividad(h)
-        && h.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(h);
-  });
-
-  repararEstructura(true);
-
+  const r = montarLibro(ss, anio);
   ui.alert('Estructura creada',
-    'Siguientes pasos:\n\n'
+    (r.configuracion.length ? 'Configuración del centro (hoja Ajustes):\n• ' + r.configuracion.join('\n• ') + '\n\n' : '')
+    + 'Siguientes pasos:\n\n'
     + '1. Caja: escribe arriba el saldo inicial del banco y del efectivo (o déjalo vacío: '
     + 'al importar el primer extracto se propone solo).\n'
     + '2. Presupuesto: revisa las partidas y pon los importes. Puedes añadir partidas '
     + 'cuando quieras, también a mitad de curso.\n'
-    + '3. Ajustes: comprueba fechas, curso y partidas de cuotas.\n'
+    + '3. Ajustes: comprueba fechas, curso, partidas de cuotas y los datos del centro.\n'
     + '4. Tesorería → Diagnóstico → Diagnóstico del sistema.',
     ui.ButtonSet.OK);
+}
+
+/**
+ * Prepara un libro (vacío o a medias) para el ejercicio que empieza en
+ * `anio`: crea las hojas que falten, siembra Ajustes y Presupuesto y lo
+ * repara. Sin ventanas: lo usa también la consola central sobre libros que
+ * no están abiertos. Devuelve { configuracion: [lo que se ha rellenado] }.
+ */
+function montarLibro(ss, anio) {
+  return conLibro(ss, () => {
+    ss.setSpreadsheetTimeZone('Europe/Madrid');
+    ss.setSpreadsheetLocale('es_ES');
+
+    // Primero todas las hojas, vacías: las fórmulas de unas se refieren a
+    // otras, y una fórmula que apunta a una hoja que todavía no existe se
+    // queda en #REF! aunque la hoja aparezca después.
+    const nuevas = {};
+    [HOJAS.CAJA, HOJAS.PRESUPUESTO, HOJAS.CUENTAS, HOJAS.AJUSTES, HOJAS.LOG, HOJAS.LISTAS]
+      .forEach(nombre => {
+        if (!ss.getSheetByName(nombre)) { ss.insertSheet(nombre); nuevas[nombre] = true; }
+      });
+
+    if (nuevas[HOJAS.AJUSTES]) sembrarAjustes(ss, anio === null || anio === undefined ? anioPropuesto(ss.getName(), new Date()) : anio);
+    if (nuevas[HOJAS.PRESUPUESTO]) sembrarPresupuesto(ss);
+    if (nuevas[HOJAS.LOG]) ss.getSheetByName(HOJAS.LOG).getRange(1, 1, 1, 4)
+      .setValues([['Fecha', 'Nivel', 'Mensaje', 'Detalle']]).setFontWeight('bold');
+
+    // La hoja que trae un Sheet nuevo ("Hoja 1"), si sigue vacía.
+    ss.getSheets().forEach(h => {
+      if (Object.values(HOJAS).indexOf(h.getName()) === -1 && !esHojaDeActividad(h)
+          && h.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(h);
+    });
+
+    return repararLibro(ss);
+  });
 }
 
 /** Año de inicio del ejercicio: del nombre ("Ejercicio 26-27") o de la fecha. */
@@ -256,22 +455,41 @@ function anioPropuesto(nombre, hoy) {
  * protecciones. No borra ni mueve ningún dato.
  */
 function repararEstructura(silencioso) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  conFormulasEnIngles(ss, () => {
-    montarListas(ss);
-    montarPresupuesto(ss);
-    montarCaja(ss);
-    montarCuentas(ss);
-    montarAjustes(ss);
-    montarLog(ss);
-  });
-  if (typeof actualizarListaSubpartidas === 'function') actualizarListaSubpartidas(ss);
-  ordenarHojas(ss);
-  protegerHojas(ss);
+  const r = repararLibro(libro());
   if (silencioso !== true) {
     SpreadsheetApp.getUi().alert('Listo: fórmulas, formatos, desplegables y protecciones al día. '
-      + 'No se ha tocado ningún dato.');
+      + 'No se ha tocado ningún dato.'
+      + (r.configuracion.length ? '\n\nConfiguración del centro (hoja Ajustes):\n• ' + r.configuracion.join('\n• ') : ''));
   }
+}
+
+/**
+ * repararEstructura() sin ventanas, sobre cualquier libro (la consola la
+ * usa sobre los de todos los centros). Completa también Ajustes y apunta la
+ * versión de la estructura. Devuelve { configuracion: [lo rellenado] }.
+ */
+function repararLibro(ss) {
+  return conLibro(ss, () => {
+    comprobarProteccionesAjenas(ss);
+    asegurarFilasDeAjustes(ss);
+    const configuracion = completarConfiguracion(ss);
+    const comunes = typeof asegurarPartidasComunes === 'function' ? asegurarPartidasComunes(ss) : [];
+    if (comunes.length) configuracion.push('Partidas comunes añadidas al Presupuesto: ' + comunes.join(', '));
+    conFormulasEnIngles(ss, () => {
+      montarListas(ss);
+      montarPresupuesto(ss);
+      montarCaja(ss);
+      montarCuentas(ss);
+      montarAjustes(ss);
+      montarLog(ss);
+    });
+    if (typeof actualizarListaSubpartidas === 'function') actualizarListaSubpartidas(ss);
+    ordenarHojas(ss);
+    protegerHojas(ss);
+    escribirAjuste(ss, AJUSTES.VERSION, VERSION_ESTRUCTURA);
+    registrarPrograma(ss);
+    return { configuracion: configuracion };
+  });
 }
 
 /**
@@ -556,7 +774,8 @@ function montarPresupuesto(ss) {
   montarTablaDePartidas(h, false);
   const P = PRESUPUESTO.PRIMERA_FILA;
   h.getRange('A8').setValue('Añade partidas en la tabla cuando haga falta, también a mitad de curso. '
-    + 'Código: I (ingreso) o G (gasto) + número de sección (1-4) + número de partida. Ej.: I32, G32.')
+    + 'Código: I (ingreso) o G (gasto) + número de sección (1-4) + número de partida. Ej.: I32, G32. '
+    + 'Las de código en negrita son las comunes de JMV España: no cambies su código ni las borres.')
     .setFontStyle('italic').setFontColor('#666666');
 
   const filas = h.getMaxRows() - P + 1;
@@ -575,7 +794,14 @@ function montarPresupuesto(ss) {
       .setBackground(ROJO).setRanges([h.getRange(`A${P}:A`)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied(`=AND($E${P}<>"", COUNTIF($E$${P}:$E, $E${P})>1)`)
-      .setBackground(ROJO).setRanges([h.getRange(`E${P}:E`)]).build()
+      .setBackground(ROJO).setRanges([h.getRange(`E${P}:E`)]).build(),
+    // Las partidas comunes de JMV España (09_Nacional.js), en negrita.
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(`=REGEXMATCH($A${P}, "^(${PRESUPUESTO.INGRESOS.map(x => x[0]).join('|')})$")`)
+      .setBold(true).setRanges([h.getRange(`A${P}:A`)]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(`=REGEXMATCH($E${P}, "^(${PRESUPUESTO.GASTOS.map(x => x[0]).join('|')})$")`)
+      .setBold(true).setRanges([h.getRange(`E${P}:E`)]).build()
   ]);
 }
 
@@ -620,7 +846,7 @@ function montarCuentas(ss) {
  * { ingresos: [{ codigo, descripcion, seccion, importe }], gastos: [...] }
  */
 function leerPartidas(ss) {
-  const h = (ss || SpreadsheetApp.getActiveSpreadsheet()).getSheetByName(HOJAS.PRESUPUESTO);
+  const h = (ss || libro()).getSheetByName(HOJAS.PRESUPUESTO);
   const P = PRESUPUESTO.PRIMERA_FILA;
   const n = h.getMaxRows() - P + 1;
   const v = n > 0 ? h.getRange(P, 1, n, 8).getValues() : [];
@@ -682,6 +908,9 @@ function sembrarAjustes(ss, anio) {
   ];
   AJUSTES.TRAMOS_POR_DEFECTO.forEach(t => filas.push([AJUSTES.PREFIJO_TRAMO + t[0], t[1],
     'Partida de ingresos a la que va la cuota de un socio de ese tramo (Tramo_cuota en BD Socios).']));
+  Object.keys(CONFIG_EN_AJUSTES).forEach(k => filas.push([CONFIG_EN_AJUSTES[k][0], '', CONFIG_EN_AJUSTES[k][1]]));
+  filas.push([AJUSTES.VERSION, '', 'La escribe «Reparar». Si es menor que la del programa, el Diagnóstico pide reparar.']);
+  filas.push([AJUSTES.PROGRAMA, '', 'Lo escribe el libro al abrirse. La consola lo usa para subir las versiones nuevas del programa.']);
   // Texto antes de escribir, o "2026-2027" podría leerse como otra cosa.
   h.getRange('B2:B').setNumberFormat('@');
   h.getRange('B3:B4').setNumberFormat(CAJA.FORMATO_FECHA);
@@ -725,7 +954,7 @@ function montarLog(ss) {
  * { ejercicio, inicio, fin, curso, anterior, ultimoExtracto, tramos: {'10-15': 'I11', …} }
  */
 function leerAjustes(ss) {
-  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  ss = ss || libro();
   const h = ss.getSheetByName(HOJAS.AJUSTES);
   if (!h) throw new Error('Falta la hoja «Ajustes». Ejecuta Tesorería → Ejercicio → Crear estructura.');
   const valores = h.getDataRange().getValues();
@@ -754,17 +983,39 @@ function leerAjustes(ss) {
   return a;
 }
 
-function escribirAjuste(ss, clave, valor) {
+function escribirAjuste(ss, clave, valor, descripcion) {
   const h = ss.getSheetByName(HOJAS.AJUSTES);
   const claves = h.getRange(1, 1, h.getLastRow(), 1).getValues().map(f => String(f[0]).trim());
   const i = claves.indexOf(clave);
   if (i >= 0) h.getRange(i + 1, 2).setValue(valor);
-  else h.appendRow([clave, valor, '']);
+  else h.appendRow([clave, valor, descripcion || '']);
+  CONTEXTO.ajustes = null;
+}
+
+/**
+ * Añade a Ajustes las filas que tenga un libro nuevo y le falten a este
+ * (libros de antes de la configuración en Ajustes), vacías. Devuelve cuántas.
+ */
+function asegurarFilasDeAjustes(ss) {
+  const h = ss.getSheetByName(HOJAS.AJUSTES);
+  const hay = {};
+  h.getRange(1, 1, Math.max(h.getLastRow(), 1), 1).getValues().forEach(f => { hay[String(f[0]).trim()] = true; });
+  const faltan = Object.keys(CONFIG_EN_AJUSTES).map(k => CONFIG_EN_AJUSTES[k])
+    .concat([[AJUSTES.VERSION, 'La escribe «Reparar». Si es menor que la del programa, el Diagnóstico pide reparar.'],
+      [AJUSTES.PROGRAMA, 'Lo escribe el libro al abrirse. La consola lo usa para subir las versiones nuevas del programa.']])
+    .filter(x => !hay[x[0]]);
+  if (faltan.length) {
+    const desde = h.getLastRow() + 1;
+    h.getRange(desde, 1, faltan.length, 3).setValues(faltan.map(x => [x[0], '', x[1]]));
+    h.getRange(desde, 2, faltan.length, 1).setNumberFormat('@');
+  }
+  CONTEXTO.ajustes = null;
+  return faltan.length;
 }
 
 function registrar(nivel, mensaje, detalle) {
   try {
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJAS.LOG)
+    libro().getSheetByName(HOJAS.LOG)
       .appendRow([new Date(), nivel, mensaje, String(detalle || '').slice(0, 5000)]);
   } catch (e) { console.error(e.message); }
 }
@@ -773,26 +1024,33 @@ function registrar(nivel, mensaje, detalle) {
 // ==================================================================
 // PROTECCIONES
 //
-// Dos tipos, a propósito:
-//  - ESTRICTAS (solo quien las pone puede editar): lo que es copia o
-//    cálculo y el script no reescribe nunca al trabajar — Cuentas, el
-//    resumen del Presupuesto, la parte copiada de las hojas de actividad.
-//  - DE AVISO (cualquiera puede, tras confirmar): lo que el script SÍ
-//    escribe mientras trabaja (IDs, saldo, columnas técnicas, Log). Una
-//    protección estricta haría fallar al script cuando lo ejecuta otra
-//    persona del equipo, porque el script actúa con los permisos de
-//    quien lo lanza.
+// Todas DE AVISO (cualquiera puede editar tras confirmar), como en BD
+// Socios (§3.11 de su guía). Antes, lo que es copia o cálculo (Cuentas, el
+// resumen del Presupuesto, las hojas de actividad) llevaba protección
+// ESTRICTA: solo quien la ponía podía editar. Con varias personas de
+// tesorería (cuentas @gmail) y la consola reparando con la cuenta de la
+// administración, eso rompía «Reparar» en cuanto lo lanzaba otra persona
+// («Estás intentando editar una celda o un objeto protegidos»), porque el
+// script actúa con los permisos de quien lo lanza. El aviso basta para lo
+// que se buscaba: que nadie escriba ahí sin querer.
 // ==================================================================
 
 function protegerHojas(ss) {
   // Fuera las protecciones que pusimos antes (se reconocen por el
   // prefijo); las que haya puesto una persona se respetan.
+  // Las que no puede tocar quien repara (las puso otra persona: por
+  // ejemplo, la administración desde la consola) se dejan como están y no se
+  // duplican: proteger() se las salta.
+  CONTEXTO.protegidas = {};
   ss.getProtections(SpreadsheetApp.ProtectionType.RANGE)
     .concat(ss.getProtections(SpreadsheetApp.ProtectionType.SHEET))
     .forEach(p => {
       const r = p.getRange && p.getRange();
       const enActividad = r && esHojaDeActividad(r.getSheet());
-      if (String(p.getDescription()).indexOf(PROTECCION) === 0 && !enActividad) p.remove();
+      const desc = String(p.getDescription());
+      if (desc.indexOf(PROTECCION) !== 0 || enActividad) return;
+      if (p.canEdit()) p.remove();
+      else CONTEXTO.protegidas[desc + '|' + (r ? r.getSheet().getName() + '!' + r.getA1Notation() : '')] = true;
     });
 
   const caja = ss.getSheetByName(HOJAS.CAJA);
@@ -804,19 +1062,37 @@ function protegerHojas(ss) {
   proteger(caja.getRange(`${L('Saldo extracto')}${P}:${L('Huella extracto')}`), 'columnas técnicas del script', true);
 
   const pres = ss.getSheetByName(HOJAS.PRESUPUESTO);
-  proteger(pres.getRange(`A1:H${PRESUPUESTO.FILA_CABECERA}`), 'resumen y cabecera del presupuesto', false);
-  proteger(pres.getRange(`B${PRESUPUESTO.PRIMERA_FILA}:B`), 'sección (se deduce del código)', false);
-  proteger(pres.getRange(`F${PRESUPUESTO.PRIMERA_FILA}:F`), 'sección (se deduce del código)', false);
+  proteger(pres.getRange(`A1:H${PRESUPUESTO.FILA_CABECERA}`), 'resumen y cabecera del presupuesto', true);
+  proteger(pres.getRange(`B${PRESUPUESTO.PRIMERA_FILA}:B`), 'sección (se deduce del código)', true);
+  proteger(pres.getRange(`F${PRESUPUESTO.PRIMERA_FILA}:F`), 'sección (se deduce del código)', true);
 
   const cuentas = ss.getSheetByName(HOJAS.CUENTAS);
-  proteger(cuentas.getRange('A1:H' + cuentas.getMaxRows()), 'cuentas (solo fórmulas)', false);
+  proteger(cuentas.getRange('A1:H' + cuentas.getMaxRows()), 'cuentas (solo fórmulas)', true);
 
   proteger(ss.getSheetByName(HOJAS.AJUSTES).getDataRange(), 'ajustes del ejercicio', true);
   proteger(ss.getSheetByName(HOJAS.LOG).getRange('A:D'), 'registro del script', true);
   proteger(ss.getSheetByName(HOJAS.LISTAS).getRange('A:C'), 'listas de los desplegables', true);
 }
 
+/**
+ * Antes de reparar: las protecciones ESTRICTAS que puso este programa en
+ * versiones anteriores y que quien repara no puede editar harían fallar
+ * «Reparar» a mitad. Se avisa antes de tocar nada, diciendo qué hacer.
+ */
+function comprobarProteccionesAjenas(ss) {
+  const ajenas = ss.getProtections(SpreadsheetApp.ProtectionType.RANGE)
+    .concat(ss.getProtections(SpreadsheetApp.ProtectionType.SHEET))
+    .filter(p => String(p.getDescription()).indexOf(PROTECCION) === 0 && !p.isWarningOnly() && !p.canEdit())
+    .filter(p => { const r = p.getRange && p.getRange(); return !(r && esHojaDeActividad(r.getSheet())); });
+  if (!ajenas.length) return;
+  const donde = ajenas.map(p => { const r = p.getRange(); return `${r.getSheet().getName()}!${r.getA1Notation()}`; });
+  throw new Error(`Este libro tiene protecciones de una versión anterior que solo puede editar quien las puso `
+    + `(${donde.slice(0, 4).join(', ')}${donde.length > 4 ? '…' : ''}). Que esa persona (normalmente la cuenta del centro) `
+    + 'pulse «Reparar» una vez, o que las quite en Datos → Proteger hojas e intervalos. Después ya puede reparar cualquiera.');
+}
+
 function proteger(rango, descripcion, soloAviso) {
+  if (CONTEXTO.protegidas && CONTEXTO.protegidas[PROTECCION + descripcion + '|' + rango.getSheet().getName() + '!' + rango.getA1Notation()]) return null;
   const p = rango.protect().setDescription(PROTECCION + descripcion);
   if (soloAviso) { p.setWarningOnly(true); return p; }
   const yo = Session.getEffectiveUser();
@@ -894,6 +1170,14 @@ function euros(n) {
 }
 
 /** Sin tildes, en mayúsculas, solo letras, cifras y espacios. Para comparar. */
+/** ¿Dice la celda Factura que el gasto no la necesita? («No requiere · …», también escrito a mano). */
+function noRequiereFactura(t) {
+  return normalizarTexto(t).indexOf(normalizarTexto(CAJA.SIN_FACTURA)) === 0;
+}
+
+/** Lo que se escribe en Factura para un motivo: «No requiere · Devolución a una familia o particular». */
+function textoSinFactura(motivo) { return CAJA.SIN_FACTURA + CAJA.SEPARADOR_OPCION + motivo; }
+
 function normalizarTexto(t) {
   return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
@@ -906,10 +1190,10 @@ function subcarpeta(idPadre, nombre) {
   return it.hasNext() ? it.next() : padre.createFolder(nombre);
 }
 
-/** Carpeta de este ejercicio dentro de una de las de Config.js. */
+/** Carpeta de este ejercicio dentro de una de las del centro (Ajustes). */
 function carpetaDelEjercicio(claveConfig, ss) {
   const id = config(claveConfig);
-  if (!id) throw new Error(`Falta ${claveConfig} en Config.js.`);
+  if (!id) throw new Error(`Falta «${CONFIG_EN_AJUSTES[claveConfig][0]}» en Ajustes: Tesorería → Ejercicio → Reparar la rellena sola.`);
   return subcarpeta(id, leerAjustes(ss).ejercicio);
 }
 
@@ -929,8 +1213,9 @@ function carpetaDelEjercicio(claveConfig, ss) {
  * Cada opción nombra su función por texto y solo aparece si existe en el
  * proyecto (limpiarMenu()). Si añades una función de menú, añádela aquí.
  */
-function entradasDelMenu() {
+function entradasDelMenu(consola) {
   return [
+    ['Abrir el panel de tesorería', 'abrirPanel'],
     ['⇄ Traspaso entre banco y efectivo…', 'abrirApuntarTraspaso'],
     '-',
     ['Importar extracto bancario…', 'abrirImportarExtracto'],
@@ -972,7 +1257,18 @@ function entradasDelMenu() {
       ['Instalar sincronización automática (cada hora)', 'instalarSincronizacionAutomatica'],
       ['Quitar sincronización automática', 'quitarSincronizacionAutomatica']
     ] }
-  ];
+  ].concat(consola ? ['-', { sub: 'Consola nacional', entradas: [
+    ['Buscar los centros en las unidades compartidas', 'consolaBuscarCentros'],
+    ['Actualizar el estado de todos los centros', 'consolaActualizarEstado'],
+    '-',
+    ['Crear los libros que falten del ejercicio…', 'consolaCrearLibros'],
+    ['Reparar la estructura de todos los libros', 'consolaRepararTodos'],
+    '-',
+    ['Informe nacional…', 'consolaInformeNacional'],
+    '-',
+    ['Lista de programas para desplegar…', 'consolaListaDeProgramas'],
+    ['Actualizar el estado cada noche', 'consolaInstalarActualizacion']
+  ] }] : []);
 }
 
 /**
@@ -1000,10 +1296,51 @@ function pintarMenu(ui, menu, entradas) {
   return menu;
 }
 
-function onOpen() {
+/**
+ * El código va vinculado a cada libro (CLAUDE.md §2: las personas de
+ * tesorería usan @gmail y un complemento interno no les llegaría), así que
+ * el menú sale arriba, «Tesorería». Si algún día se publica como
+ * complemento, va solo a Extensiones (esComplemento()). La consola nacional
+ * solo sale en el libro de la consola.
+ */
+function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
   const existe = nombre => typeof globalThis[nombre] === 'function';
-  pintarMenu(ui, ui.createMenu('Tesorería'), limpiarMenu(entradasDelMenu(), existe)).addToUi();
+  let consola = false;
+  try {
+    const modo = e && e.authMode;
+    if (modo !== ScriptApp.AuthMode.NONE && typeof esLibroDeConsola === 'function') consola = esLibroDeConsola(libro());
+  } catch (err) { consola = false; }
+  const menu = esComplemento() ? ui.createAddonMenu() : ui.createMenu('Tesorería');
+  pintarMenu(ui, menu, limpiarMenu(entradasDelMenu(consola), existe)).addToUi();
+  try { registrarPrograma(libro()); } catch (err) { /* sin permiso para escribir: no pasa nada */ }
+}
+
+/**
+ * Apunta en Ajustes el ID del script de este libro (cada libro tiene el
+ * suyo, y cada copia anual uno nuevo). La consola no puede saberlo desde
+ * fuera (no hay forma de pasar de una hoja a su script): lo recoge de aquí
+ * para que el despliegue sepa a qué proyectos subir cada versión. Se llama
+ * al abrir, al reparar y desde el panel, la ventana de asientos y el
+ * Diagnóstico; solo escribe si cambia.
+ */
+function registrarPrograma(ss) {
+  if (esComplemento() || !ss || !ss.getSheetByName(HOJAS.AJUSTES)) return;
+  const id = ScriptApp.getScriptId();
+  conLibro(ss, () => {
+    if (String(mapaDeAjustes()[AJUSTES.PROGRAMA] || '').trim() !== id) {
+      escribirAjuste(ss, AJUSTES.PROGRAMA, id, 'Lo escribe el libro al abrirse. La consola lo usa para subir las versiones nuevas del programa.');
+    }
+  });
+}
+
+/** Al instalar el complemento, el menú tiene que salir ya, sin recargar. */
+function onInstall(e) { onOpen(e); }
+
+/** ¿Corre como complemento (y no como script vinculado a un libro)? */
+function esComplemento() {
+  try { return ScriptApp.getInstallationSource() !== ScriptApp.InstallationSource.NONE; }
+  catch (e) { return false; }
 }
 
 /**

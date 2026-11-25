@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px; font-family: Ubuntu, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px; color: #222; }
+  [hidden] { display: none !important; }
+  .saldos { background: #f6f7fb; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; line-height: 1.7; }
+  .saldos b { font-weight: 500; }
+  .saldos .centro { color: #667; font-size: 12px; }
+  button { display: flex; align-items: center; width: 100%; text-align: left; font-family: inherit; font-size: 13.5px;
+           padding: 10px 12px; margin: 0 0 6px; border-radius: 8px; border: 1px solid #c4c9dc; background: #fff; cursor: pointer; }
+  button:hover { background: #eef0f8; }
+  button.destacado { background: #18A2B5; border-color: #18A2B5; color: #fff; font-weight: 500; font-size: 14px; padding: 12px; }
+  button.destacado:hover { background: #128a9b; }
+  button .n { margin-left: auto; background: #D9A441; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 11.5px; }
+  button .n.cero { background: #c4c9dc; }
+  .grupo { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #889; margin: 12px 2px 6px; }
+  .aviso { background: #FFF6E5; border-left: 4px solid #D9A441; padding: 8px 10px; margin: 0 0 12px; border-radius: 4px; font-size: 12.5px; }
+  .error { background: #fdecee; border-left: 4px solid #b00020; padding: 8px 10px; margin: 0 0 12px; border-radius: 4px; }
+  .pie { color: #889; font-size: 11.5px; margin-top: 14px; }
+  a { color: #3d55a8; }
+</style>
+</head>
+<body>
+  <div id="estado" class="saldos">Leyendo el libro…</div>
+  <div id="avisos"></div>
+
+  <button class="destacado" data-f="abrirApuntarTraspaso">⇄ Traspaso banco ↔ efectivo</button>
+
+  <div class="grupo">Banco</div>
+  <button data-f="abrirImportarExtracto">Importar extracto bancario</button>
+  <button data-f="abrirNuevaTransferencia">＋ Nuevo gasto por transferencia</button>
+  <button data-f="abrirTransferenciasPendientes">Transferencias pendientes <span class="n" id="n_pendientes"></span></button>
+  <button data-f="abrirMovimientosPorCompletar">Completar movimientos <span class="n" id="n_completar"></span></button>
+  <button data-f="abrirFacturasQueFaltan">Facturas que faltan <span class="n" id="n_facturas"></span></button>
+
+  <div class="grupo">Efectivo y socios</div>
+  <button data-f="abrirEfectivo">Ingreso o gasto en efectivo</button>
+  <button data-f="sincronizarConBdSociosAhora" id="sincronizar" hidden>Sincronizar cuotas con BD Socios</button>
+
+  <div class="grupo">Informes</div>
+  <button data-f="abrirInformes">Generar informe contable</button>
+
+  <div class="pie"><a href="#" id="recargar">Actualizar</a> · El resto de opciones, en el menú Tesorería.</div>
+
+<script>
+/* Sin dobles barras en este script (BD Socios, CLAUDE.md §3.9). */
+function $(id) { return document.getElementById(id); }
+function euros(n) {
+  var v = Math.round((Number(n) || 0) * 100) / 100, s = Math.abs(v).toFixed(2).split('.');
+  return (v < 0 ? '-' : '') + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1] + ' €';
+}
+function esc(t) { return String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function cargar() {
+  google.script.run
+    .withSuccessHandler(function (d) {
+      if (!d.libro) {
+        $('estado').innerHTML = 'Este archivo todavía no es un libro de cuentas.';
+        $('avisos').innerHTML = '<div class="aviso">Para prepararlo: Tesorería → Ejercicio → Crear estructura.</div>';
+        return;
+      }
+      $('estado').innerHTML = (d.centro ? '<div class="centro">' + esc(d.centro) + '</div>' : '')
+        + 'Ejercicio <b>' + esc(d.ejercicio) + '</b><br>Banco: <b>' + euros(d.saldos.banco) + '</b><br>Efectivo: <b>' + euros(d.saldos.efectivo) + '</b>'
+        + (d.ultimoExtracto ? '<div class="centro">Último extracto: ' + esc(d.ultimoExtracto) + '</div>' : '');
+      $('sincronizar').hidden = !d.bdSocios;
+      ['pendientes', 'completar', 'facturas'].forEach(function (k) { $('n_' + k).textContent = d[k]; $('n_' + k).className = 'n' + (d[k] ? '' : ' cero'); });
+      $('avisos').innerHTML = d.reparar ? '<div class="aviso">El programa se ha actualizado y este libro necesita ponerse al día: '
+        + 'Tesorería → Ejercicio → Reparar fórmulas, formatos y protecciones.</div>' : '';
+    })
+    .withFailureHandler(function (e) { $('estado').innerHTML = '<div class="error">' + esc(e.message || e) + '</div>'; })
+    .estadoDelPanel();
+}
+document.querySelectorAll('button[data-f]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    b.disabled = true;
+    google.script.run
+      .withSuccessHandler(function () { b.disabled = false; })
+      .withFailureHandler(function (e) { b.disabled = false; $('avisos').innerHTML = '<div class="error">' + esc(e.message || e) + '</div>'; })[b.dataset.f]();
+  });
+});
+$('recargar').addEventListener('click', function (ev) { ev.preventDefault(); cargar(); });
+cargar();
+</script>
+</body>
+</html>

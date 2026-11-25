@@ -15,3 +15,5 @@ nav:
   - informes.md
   - cambio-de-ejercicio.md
   - si-algo-no-cuadra.md
+  # Para el equipo nacional, no para los centros: al final.
+  - consola-nacional.md

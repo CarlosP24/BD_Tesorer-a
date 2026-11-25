@@ -43,9 +43,10 @@ Hazlo **cada dos o tres semanas**, y siempre antes de sacar un informe.
 
     [![Ventana Importar extracto bancario con el archivo elegido](../../assets/img/importar-extracto/02.png)](../../assets/img/importar-extracto/02.png)
 
-3. Deja marcada la casilla **Al terminar, apuntar en BD Socios las cuotas
-   reconocidas**, salvo que sepas que el extracto trae algo raro (por ejemplo,
-   pagos del curso pasado: ver [Cambio de ejercicio](cambio-de-ejercicio.md)).
+3. Si tu centro tiene base de socios, verás la casilla **Al terminar, apuntar
+   en BD Socios las cuotas reconocidas**. Déjala marcada, salvo que sepas que
+   el extracto trae algo raro (por ejemplo, pagos del curso pasado: ver
+   [Cambio de ejercicio](cambio-de-ejercicio.md)).
 4. Pulsa **Subir y procesar** y espera. Puede tardar hasta un minuto.
 
 ### 3. Lee el resumen
@@ -55,9 +56,9 @@ Al terminar, la ventana dice qué ha hecho:
 [![Resumen de la importación con los movimientos nuevos y las cuotas identificadas](../../assets/img/importar-extracto/03.png)](../../assets/img/importar-extracto/03.png)
 
 - **Nuevos en Caja**: cuántos movimientos se han añadido.
-- **Cuotas identificadas**: ingresos en los que el libro ha reconocido qué
-  socio paga. Esas cuotas se apuntan solas como pagadas en la base de datos
-  de socios.
+- **Cuotas identificadas** (solo con base de socios): ingresos en los que el
+  libro ha reconocido qué socio paga. Esas cuotas se apuntan solas como
+  pagadas en la base de datos de socios.
 - **Ingresos sin socio identificado**: los que no ha sabido de quién son. Ver
   [Cuotas de socio](cuotas.md).
 - **✓ El saldo calculado coincide con el del banco**: todo cuadra. Si en vez de

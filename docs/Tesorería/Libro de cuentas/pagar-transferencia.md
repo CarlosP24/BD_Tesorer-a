@@ -65,7 +65,9 @@ informes, así que mejor «Autobús de vuelta de la convivencia» que «Pago».
   El libro quita las tildes y la ñ, que algunos bancos no admiten.
 - **Factura**: si ya la tienes, arrástrala al recuadro o pulsa para elegirla
   (PDF o foto). Si aún no la tienes, no pasa nada: podrás subirla después desde
-  [Facturas](facturas.md).
+  [Facturas](facturas.md). Si es un **movimiento entre cuentas de JMV** o una
+  **devolución** a una familia, elige la opción **No necesita factura** que
+  corresponda ([Gastos que no llevan factura](facturas.md#gastos-que-no-llevan-factura)).
 
 Pulsa **Apuntar el gasto**.
 

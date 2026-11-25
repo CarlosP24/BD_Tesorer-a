@@ -68,7 +68,7 @@ const SOCIOS = {
 
 function abrirBdSocios() {
   const id = config('ID_BD_SOCIOS');
-  if (!id) throw new Error('Falta ID_BD_SOCIOS en Config.js.');
+  if (!id) throw new Error(`Falta «${CONFIG_EN_AJUSTES.ID_BD_SOCIOS[0]}» en Ajustes: pega allí el enlace de la base de socios del centro.`);
   return SpreadsheetApp.openById(id);
 }
 
@@ -564,10 +564,16 @@ function estadoDeCuota(pagado, debido, bonificacion) {
 
 function sincronizarConBdSociosAhora() {
   const ui = SpreadsheetApp.getUi();
-  const lock = LockService.getScriptLock();
+  if (!config('ID_BD_SOCIOS')) {
+    ui.alert('Sin base de socios', 'Este centro no tiene una base de datos de socios conectada (fila '
+      + `«${CONFIG_EN_AJUSTES.ID_BD_SOCIOS[0]}» de Ajustes), así que no hay nada que sincronizar: las cuotas se apuntan `
+      + 'en Caja sin conciliar.', ui.ButtonSet.OK);
+    return;
+  }
+  const lock = bloqueo();
   if (!lock.tryLock(30000)) { ui.alert('Hay otra importación o sincronización en marcha. Prueba en un minuto.'); return; }
   try {
-    const r = sincronizarConBdSocios(SpreadsheetApp.getActiveSpreadsheet());
+    const r = sincronizarConBdSocios(libro());
     ui.alert('Cuotas y BD Socios', r.lineas.join('\n\n'), ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('No se ha podido sincronizar', e.message, ui.ButtonSet.OK);
@@ -577,30 +583,52 @@ function sincronizarConBdSociosAhora() {
 }
 
 /** Disparador horario (instalarSincronizacionAutomatica()). Nunca toca la interfaz. */
-function sincronizacionAutomatica() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return;
-  try {
-    const r = sincronizarConBdSocios(SpreadsheetApp.getActiveSpreadsheet());
-    if (r.hecho) registrar('INFO', 'Sincronización automática con BD Socios', r.lineas.join('\n'));
-  } catch (e) {
-    registrar('ERROR', 'Sincronización automática con BD Socios', e.message);
-  } finally {
-    lock.releaseLock();
-  }
+/**
+ * Disparador horario. Nunca toca la interfaz. En un complemento no hay
+ * libro activo en un disparador: se abre el que se guardó al instalarlo
+ * (propiedad de usuario «libro:<id del disparador>»).
+ */
+function sincronizacionAutomatica(e) {
+  const id = e && e.triggerUid ? PropertiesService.getUserProperties().getProperty('libro:' + e.triggerUid) : '';
+  const ss = id ? SpreadsheetApp.openById(id) : libro();
+  if (!ss) return;
+  conLibro(ss, () => {
+    const lock = bloqueo();
+    if (!lock.tryLock(5000)) return;
+    try {
+      const r = sincronizarConBdSocios(ss);
+      if (r.hecho) registrar('INFO', 'Sincronización automática con BD Socios', r.lineas.join('\n'));
+    } catch (err) {
+      registrar('ERROR', 'Sincronización automática con BD Socios', err.message);
+    } finally {
+      lock.releaseLock();
+    }
+  });
 }
 
 function instalarSincronizacionAutomatica() {
   quitarSincronizacionAutomatica(true);
-  ScriptApp.newTrigger('sincronizacionAutomatica').timeBased().everyHours(1).create();
-  SpreadsheetApp.getUi().alert('Listo: cada hora se sincronizarán con BD Socios las cuotas de Caja. '
+  const ss = libro();
+  const t = ScriptApp.newTrigger('sincronizacionAutomatica').timeBased().everyHours(1).create();
+  PropertiesService.getUserProperties().setProperty('libro:' + t.getUniqueId(), ss.getId());
+  SpreadsheetApp.getUi().alert('Listo: cada hora se sincronizarán con BD Socios las cuotas de Caja de este libro. '
     + 'Instálalo solo en el libro del ejercicio en curso.');
 }
 
+/** Quita los disparadores de sincronización de ESTE libro (los de otros libros se quedan). */
 function quitarSincronizacionAutomatica(silencioso) {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sincronizacionAutomatica')
-    .forEach(t => ScriptApp.deleteTrigger(t));
+  disparadoresDelLibro(libro(), 'sincronizacionAutomatica').forEach(t => {
+    PropertiesService.getUserProperties().deleteProperty('libro:' + t.getUniqueId());
+    ScriptApp.deleteTrigger(t);
+  });
   if (silencioso !== true) SpreadsheetApp.getUi().alert('Sincronización automática quitada.');
+}
+
+/** Los disparadores de esa función que pertenecen a ese libro, como script vinculado o como complemento. */
+function disparadoresDelLibro(ss, funcion) {
+  const props = PropertiesService.getUserProperties();
+  return ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === funcion
+    && (props.getProperty('libro:' + t.getUniqueId()) === ss.getId() || !props.getProperty('libro:' + t.getUniqueId())));
 }
 
 /**

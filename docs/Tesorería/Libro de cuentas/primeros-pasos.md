@@ -24,8 +24,8 @@ miedo a romper nada.
 [![El libro abierto en la hoja Caja, con cinco zonas numeradas](../../assets/img/primeros-pasos/01.png)](../../assets/img/primeros-pasos/01.png)
 
 1. **El menú Tesorería.** Está arriba, al final de la barra de menús (después
-   de *Ayuda*). Desde él se hace casi todo. La primera vez que abres el libro
-   puede tardar unos segundos en aparecer.
+   de *Ayuda*). Desde él se hace casi todo. Al abrir el libro tarda unos
+   segundos en aparecer.
 2. **Los saldos.** La fila 1 dice con cuánto dinero empezó el ejercicio, en el
    banco y en efectivo; la fila 2, cuánto hay ahora. Se calculan solos.
 3. **La cabecera.** Los nombres de las columnas (*Fecha*, *Concepto Banco*,
@@ -52,26 +52,55 @@ miedo a romper nada.
 | **Presupuesto** | Las partidas y lo que se espera ingresar y gastar en cada una. |
 | **Cuentas** | Lo mismo que Presupuesto, pero con lo que se ha movido de verdad. Se rellena sola. |
 | **Act · …** y **Fin · …** | Una por actividad (convivencia, campamento, lotería…), con su presupuesto y sus movimientos. |
-| **Ajustes** | Datos del ejercicio: fechas, curso de la base de socios… Normalmente no se toca. |
+| **Ajustes** | Datos del ejercicio (fechas, curso) y del centro (nombre, código, carpetas, cuenta del banco). Casi todo se rellena solo y normalmente no se toca. |
 | **Log** | Un registro de lo que ha hecho el sistema. Sirve para buscar qué pasó. |
 
-### 4. El menú Tesorería
+### 4. El menú y el panel de tesorería
 
 [![El menú Tesorería desplegado](../../assets/img/primeros-pasos/02.png)](../../assets/img/primeros-pasos/02.png)
+
+La primera opción, **Abrir el panel de tesorería**, es la más cómoda. Abre a
+la derecha de la hoja un panel con un botón para cada tarea, que se queda
+abierto mientras trabajas:
+
+[![Panel de tesorería a la derecha de la hoja, con los saldos y un botón por tarea](../../assets/img/primeros-pasos/04.png)](../../assets/img/primeros-pasos/04.png)
 
 Arriba del todo está el **traspaso entre banco y efectivo**, destacado porque
 es lo que hay que apuntar *antes* de ingresar o sacar efectivo. Debajo, lo que
 se usa a menudo: importar el extracto, pagar por transferencia, completar los
-pagos con tarjeta, las facturas y el efectivo. Los submenús del final (*Caja*,
-*Actividades*, *Ejercicio*, *Diagnóstico*) son para tareas menos frecuentes.
+pagos con tarjeta, las facturas y el efectivo. Los números en naranja dicen
+cuántas cosas quedan pendientes en cada lista.
 
-!!! warning "La primera vez pide permiso"
+En el menú hay además unos submenús (*Caja*, *Actividades*, *Ejercicio*,
+*Diagnóstico*) para tareas menos frecuentes.
 
-    La primera vez que uses una opción del menú, Google te pedirá
-    **autorizar** el programa del libro. Elige tu cuenta del centro y pulsa
-    **Permitir**. Solo pasa una vez por persona y por libro.
+!!! info "En estas guías"
 
-### 5. Los colores
+    Cuando leas **Tesorería → Facturas que faltan…**, puedes usar el menú o
+    el botón equivalente del panel: es lo mismo.
+
+### 5. La primera vez: autorizar el programa
+
+El libro lleva dentro un pequeño programa (el que hace funcionar el menú, las
+ventanas y el panel). La primera vez que uses una opción del menú, Google te
+pide permiso para que ese programa pueda trabajar con tu cuenta:
+
+1. Sale «**Se necesita autorización**». Pulsa **Continuar** y elige la cuenta
+   con la que trabajas en el libro (la del centro o tu @gmail).
+2. Sale «**Google no ha verificado esta aplicación**». Es normal: el programa
+   es de JMV España y no está publicado en ninguna tienda. Pulsa
+   **Configuración avanzada** (abajo a la izquierda) y luego **Ir a … (no
+   seguro)**.
+3. Revisa la lista de permisos y pulsa **Permitir**.
+4. Vuelve a elegir la opción del menú que querías.
+
+!!! info "Una vez por libro"
+
+    Se hace una vez por persona y por libro. Cada septiembre, con el libro del
+    ejercicio nuevo, toca hacerlo otra vez. Si un día el programa necesita
+    permisos nuevos, también lo volverá a pedir.
+
+### 6. Los colores
 
 El libro pinta las celdas para avisarte de lo que hay que mirar:
 
@@ -89,7 +118,7 @@ Fíjate en la columna **Saldo**: cada fila enseña el saldo **de su caja**. Las
 filas del banco llevan el saldo del banco, y las de efectivo (como la 6 o la
 8), el del efectivo.
 
-### 6. Lo que nunca hay que hacer
+### 7. Lo que nunca hay que hacer
 
 !!! danger "Para no romper el libro"
 

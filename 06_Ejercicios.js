@@ -1,72 +1,89 @@
 /*******************************************************************
  * JMV — TESORERÍA · Paso de un ejercicio al siguiente
  *
- * Crear el ejercicio siguiente COPIA este libro (Drive copia con él su
- * proyecto de Apps Script, así que el nuevo trae el código, el menú y la
- * estructura) y lo vacía: Caja sin asientos, Presupuesto con las mismas
- * partidas y sin importes, sin hojas de actividad, Log vacío y Ajustes
- * del año nuevo. Los saldos iniciales son los finales de este.
+ * Crear el ejercicio siguiente COPIA este libro y lo vacía: Caja sin
+ * asientos, Presupuesto con las mismas partidas y sin importes, sin hojas
+ * de actividad, Log vacío y Ajustes del año nuevo (con la misma
+ * configuración del centro). Los saldos iniciales son los finales de este.
  *
- * Lo que NO viaja con la copia (hay que hacerlo en el nuevo, ver
- * README.md): la autorización del script, el disparador horario de
- * sincronización, y el ID del proyecto en .clasp.json.
+ * Drive copia con el libro su script: el nuevo trae el programa (con un ID
+ * nuevo, que apuntará en Ajustes al abrirse) y quien lo use tendrá que
+ * autorizarlo otra vez. Tampoco viaja el disparador horario de
+ * sincronización.
  *
- * El libro viejo se queda como está, con su código: un ejercicio cerrado
- * no debe cambiar porque el código de hoy haga algo distinto.
+ * crearEjercicioSiguiente() es la opción del menú; ejercicioSiguiente(),
+ * lo mismo sin ventanas, la usa también la consola para todos los centros.
  *******************************************************************/
 
 function crearEjercicioSiguiente() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const ui = SpreadsheetApp.getUi();
-  const aj = leerAjustes(ss);
-  const anio = aj.inicio.getFullYear() + 1;
-  const nombre = `Ejercicio ${String(anio).slice(2)}-${String(anio + 1).slice(2)}`;
-
-  const archivo = DriveApp.getFileById(ss.getId());
-  const padres = archivo.getParents();
-  const carpeta = padres.hasNext() ? padres.next() : DriveApp.getRootFolder();
-  if (carpeta.getFilesByName(nombre).hasNext()) {
-    ui.alert(`Ya existe «${nombre}» en la carpeta ${carpeta.getName()}. No se ha creado nada.`);
+  const plan = planDelEjercicioSiguiente(ss);
+  if (plan.existe) {
+    ui.alert(`Ya existe «${plan.nombre}» en la carpeta ${plan.carpeta.getName()}. No se ha creado nada.`);
     return;
   }
-
-  const filas = leerCaja(ss);
-  const saldos = saldosALaFecha(filas, saldosIniciales(ss), aj.fin);
-  const despues = filas.filter(f => f.fechaEfectiva && f.fechaEfectiva > aj.fin);
-  const pendientes = filas.filter(f => f.pendiente);
   const r = ui.alert('Crear el ejercicio siguiente',
-    `Se creará «${nombre}» (${anio}-${anio + 1}) en la carpeta ${carpeta.getName()}, con:\n\n`
-    + `• Saldo inicial del banco: ${euros(saldos.banco)}\n`
-    + `• Saldo inicial del efectivo: ${euros(saldos.efectivo)}\n`
+    `Se creará «${plan.nombre}» (${plan.anio}-${plan.anio + 1}) en la carpeta ${plan.carpeta.getName()}, con:\n\n`
+    + `• Saldo inicial del banco: ${euros(plan.saldos.banco)}\n`
+    + `• Saldo inicial del efectivo: ${euros(plan.saldos.efectivo)}\n`
     + '• Las mismas partidas del presupuesto, sin importes.\n\n'
-    + (despues.length ? `⚠ Hay ${despues.length} asientos con fecha de pago posterior al ${fechaCorta(aj.fin)} `
-      + `(${despues.slice(0, 5).map(f => f.id).join(', ')}…): no cuentan en estos saldos y habría que pasarlos al nuevo.\n\n` : '')
-    + (pendientes.length ? `⚠ Hay ${pendientes.length} transferencias pendientes (${pendientes.slice(0, 5).map(f => f.id).join(', ')}): `
-      + 'no están en estos saldos. Si salen del banco ya en el ejercicio nuevo, apúntalas allí.\n\n' : '')
+    + plan.avisos.map(a => '⚠ ' + a + '\n\n').join('')
     + 'Si después se añaden asientos a este ejercicio, en el nuevo se puede usar '
     + '«Traer los saldos iniciales del ejercicio anterior». ¿Sigo?',
     ui.ButtonSet.YES_NO);
   if (r !== ui.Button.YES) return;
 
-  SpreadsheetApp.flush();
-  const copia = archivo.makeCopy(nombre, carpeta);
-  const avisos = prepararEjercicioNuevo(SpreadsheetApp.openById(copia.getId()),
-    { anio: anio, anterior: ss.getId(), saldos: saldos });
-  registrar('INFO', `Creado el ejercicio siguiente: ${nombre}`, copia.getUrl());
-
+  const hecho = ejercicioSiguiente(ss);
   const html = HtmlService.createHtmlOutput(
     '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">'
-    + `<p><b>${nombre}</b> está creado: <a href="${copia.getUrl()}" target="_blank">abrirlo</a>.</p>`
+    + `<p><b>${hecho.nombre}</b> está creado: <a href="${hecho.url}" target="_blank">abrirlo</a>.</p>`
     + '<p>En el nuevo libro, la primera vez:</p><ol>'
-    + '<li>Ábrelo y usa cualquier opción del menú Tesorería: pedirá autorización (es otro proyecto de script).</li>'
+    + '<li>Ábrelo y usa cualquier opción del menú Tesorería: pedirá autorización (es otro script).</li>'
     + '<li>Tesorería → Diagnóstico → Diagnóstico del sistema.</li>'
-    + '<li>Si usas la sincronización automática, quítala aquí e instálala allí.</li>'
-    + '<li>Para trabajar con clasp: Extensiones → Apps Script → Configuración del proyecto → ID de la secuencia de comandos, '
-    + 'y pon ese ID en el .clasp.json del repositorio.</li></ol>'
-    + (avisos.length ? '<p>⚠ ' + avisos.join('<br>⚠ ') + '</p>' : '')
-    + '</div>').setWidth(520).setHeight(360);
+    + '<li>Si usas la sincronización automática, quítala aquí e instálala allí.</li></ol>'
+    + (hecho.avisos.length ? '<p>⚠ ' + hecho.avisos.join('<br>⚠ ') + '</p>' : '')
+    + '</div>').setWidth(520).setHeight(300);
   ui.showModalDialog(html, 'Ejercicio creado');
 }
+
+/** Qué haría ejercicioSiguiente(), sin hacerlo: { anio, nombre, carpeta, existe, saldos, avisos }. */
+function planDelEjercicioSiguiente(ss) {
+  return conLibro(ss, () => {
+    const aj = leerAjustes(ss);
+    const anio = aj.inicio.getFullYear() + 1;
+    const nombre = nombreDeEjercicio(anio);
+    const padres = DriveApp.getFileById(ss.getId()).getParents();
+    const carpeta = padres.hasNext() ? padres.next() : DriveApp.getRootFolder();
+    const filas = leerCaja(ss);
+    const saldos = saldosALaFecha(filas, saldosIniciales(ss), aj.fin);
+    const despues = filas.filter(f => f.fechaEfectiva && f.fechaEfectiva > aj.fin);
+    const pendientes = filas.filter(f => f.pendiente);
+    const avisos = [];
+    if (despues.length) avisos.push(`Hay ${despues.length} asientos con fecha de pago posterior al ${fechaCorta(aj.fin)} `
+      + `(${despues.slice(0, 5).map(f => f.id).join(', ')}…): no cuentan en estos saldos y habría que pasarlos al nuevo.`);
+    if (pendientes.length) avisos.push(`Hay ${pendientes.length} transferencias pendientes (${pendientes.slice(0, 5).map(f => f.id).join(', ')}): `
+      + 'no están en estos saldos. Si salen del banco ya en el ejercicio nuevo, apúntalas allí.');
+    return { anio: anio, nombre: nombre, carpeta: carpeta, existe: carpeta.getFilesByName(nombre).hasNext(),
+      saldos: saldos, avisos: avisos };
+  });
+}
+
+/** Crea el libro del ejercicio siguiente al de `ss`, sin ventanas. { nombre, id, url, avisos }. */
+function ejercicioSiguiente(ss) {
+  const plan = planDelEjercicioSiguiente(ss);
+  if (plan.existe) throw new Error(`Ya existe «${plan.nombre}» en la carpeta ${plan.carpeta.getName()}.`);
+  SpreadsheetApp.flush();
+  const copia = DriveApp.getFileById(ss.getId()).makeCopy(plan.nombre, plan.carpeta);
+  const nuevo = SpreadsheetApp.openById(copia.getId());
+  const avisos = plan.avisos.concat(conLibro(nuevo, () =>
+    prepararEjercicioNuevo(nuevo, { anio: plan.anio, anterior: ss.getId(), saldos: plan.saldos })));
+  conLibro(ss, () => registrar('INFO', `Creado el ejercicio siguiente: ${plan.nombre}`, copia.getUrl()));
+  return { nombre: plan.nombre, id: copia.getId(), url: copia.getUrl(), avisos: avisos };
+}
+
+/** 2027 → «Ejercicio 27-28». Pura. */
+function nombreDeEjercicio(anio) { return `Ejercicio ${String(anio).slice(2)}-${String(anio + 1).slice(2)}`; }
 
 /** Vacía la copia y la deja lista para el año nuevo. Devuelve avisos. */
 function prepararEjercicioNuevo(nuevo, o) {
@@ -105,6 +122,11 @@ function prepararEjercicioNuevo(nuevo, o) {
   escribirAjuste(nuevo, AJUSTES.CURSO, `${o.anio}-${o.anio + 1}`);
   escribirAjuste(nuevo, AJUSTES.ANTERIOR, o.anterior);
   escribirAjuste(nuevo, AJUSTES.ULTIMO_EXTRACTO, '');
+  // La copia tiene su propio script: lo apuntará ella al abrirse.
+  escribirAjuste(nuevo, AJUSTES.PROGRAMA, '');
+  // Copia del libro plantilla para otro centro: nada de la configuración de
+  // la plantilla vale (carpetas, cuenta…); reparar la rellena con la suya.
+  if (o.otroCentro) Object.keys(CONFIG_EN_AJUSTES).forEach(k => escribirAjuste(nuevo, CONFIG_EN_AJUSTES[k][0], ''));
   return avisos;
 }
 
@@ -120,7 +142,7 @@ function saldosALaFecha(filas, iniciales, corte) {
 }
 
 function traerSaldosInicialesDelAnterior() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const ui = SpreadsheetApp.getUi();
   const aj = leerAjustes(ss);
   if (!aj.anterior) {

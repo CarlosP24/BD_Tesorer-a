@@ -38,7 +38,7 @@
 <script>
   const MODO = document.body.dataset.modo;
   const CONTEXTO = document.body.dataset.contexto;   // JSON en texto
-  if (MODO === 'extracto') document.getElementById('opcionSincronizar').style.display = 'block';
+  if (MODO === 'extracto' && JSON.parse(CONTEXTO || '{}').bdSocios !== false) document.getElementById('opcionSincronizar').style.display = 'block';
   const zona = document.getElementById('zona');
   const entrada = document.getElementById('archivo');
   zona.addEventListener('dragover', e => { e.preventDefault(); zona.classList.add('encima'); });

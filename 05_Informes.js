@@ -49,7 +49,7 @@ function abrirInformes() {
  * Devuelve { url, nombre, avisos }.
  */
 function generarInforme(op) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = libro();
   const aj = leerAjustes(ss);
   let corte = op.tipo === 'cierre' ? aj.fin : fechaDeTexto(op.fecha);
   if (!corte) throw new Error('Falta la fecha de corte.');
@@ -134,7 +134,9 @@ function conceptoParaInforme(f, descripciones) {
 function movimientoParaInforme(f, descripciones) {
   return { id: f.id, fecha: fechaCorta(f.fechaEfectiva), concepto: conceptoParaInforme(f, descripciones),
     partida: f.partida || '—', subpartida: f.subpartida, cantidad: f.cantidad,
-    cuenta: f.esEfectivo ? 'Efectivo' : 'Banco', factura: !!f.factura };
+    cuenta: f.esEfectivo ? 'Efectivo' : 'Banco',
+    // Lo que sale en la columna Factura de un gasto: «Sí», «No requiere» o vacío.
+    factura: !f.factura ? '' : noRequiereFactura(f.factura) ? CAJA.SIN_FACTURA : 'Sí' };
 }
 
 function esGastoQuePideFactura(f) {

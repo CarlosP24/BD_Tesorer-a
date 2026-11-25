@@ -122,7 +122,7 @@
     <h2 style="page-break-before: always">Anexo: relación de movimientos (<?= d.numAsientos ?>)</h2>
     <table class="datos">
       <tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Partida</th><th>Cuenta</th><th class="num">Importe</th><th>Fact.</th></tr>
-      <? d.movimientos.forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.partida ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><td><?= m.cantidad < 0 ? (m.factura ? 'Sí' : '—') : '' ?></td></tr><? }); ?>
+      <? d.movimientos.forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.partida ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><td><?= m.cantidad < 0 ? (m.factura || '—') : '' ?></td></tr><? }); ?>
     </table>
   <? } ?>
 
@@ -156,7 +156,7 @@
     <? if (!bloque[1].length) { ?><div class="gris">Ninguno.</div><? } else { ?>
     <table class="datos">
       <tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Subpartida</th><th>Cuenta</th><th class="num">Importe</th><? if (bloque[0] === 'Gastos') { ?><th>Fact.</th><? } ?></tr>
-      <? bloque[1].forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.subpartida || '—' ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><? if (bloque[0] === 'Gastos') { ?><td><?= m.factura ? 'Sí' : '—' ?></td><? } ?></tr><? }); ?>
+      <? bloque[1].forEach(m => { ?><tr><td><?= m.fecha ?></td><td><?= m.id ?></td><td><?= m.concepto ?></td><td><?= m.subpartida || '—' ?></td><td><?= m.cuenta ?></td><td class="num<?= C(m.cantidad) ?>"><?= E(m.cantidad) ?></td><? if (bloque[0] === 'Gastos') { ?><td><?= m.factura || '—' ?></td><? } ?></tr><? }); ?>
     </table>
     <? } ?>
   <? }); ?>

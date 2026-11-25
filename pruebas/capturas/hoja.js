@@ -87,7 +87,10 @@ tr.finFijas td, tr.finFijas th { border-bottom: 4px solid #c4c7c5 !important; }
 .marco { position: absolute; border: 3px solid #C1443B; border-radius: 6px; z-index: 8; pointer-events: none; }
 `;
 
+// El menú Tesorería va arriba (script vinculado a cada libro). Con
+// op.menu.complemento se dibujaría dentro de Extensiones, como un complemento.
 const MENUS = ['Archivo', 'Editar', 'Ver', 'Insertar', 'Formato', 'Datos', 'Herramientas', 'Extensiones', 'Ayuda', 'Tesorería'];
+const EXTENSIONES = [['Complementos', true], ['Macros', true], ['Apps Script', false], '-', ['Tesorería JMV', true]];
 
 function pintarMenu(entradas, resaltar, x, y) {
   const filas = entradas.map(e => {
@@ -96,7 +99,7 @@ function pintarMenu(entradas, resaltar, x, y) {
       const clase = 'op' + (e[0] === resaltar ? ' res' : '') + (/^⇄/.test(e[0]) ? ' destacada' : '');
       return `<div class="${clase}"><span>${esc(e[0])}</span></div>`;
     }
-    return `<div class="op${e.sub === resaltar ? ' res' : ''}"><span>${esc(e.sub)}</span><span>▸</span></div>`;
+    return `<div class="op${e.sub === resaltar ? ' res' : ''}" data-sub="${esc(e.sub)}"><span>${esc(e.sub)}</span><span>▸</span></div>`;
   }).join('');
   return `<div class="menu" style="left:${x}px;top:${y}px">${filas}</div>`;
 }
@@ -129,7 +132,11 @@ function pantalla(op) {
     }).join('') + '</tr>';
   }).join('');
   const ancho = op.ancho || 46 + cols.reduce((s, c) => s + c.ancho, 0) + 2;
-  const menus = MENUS.map(m => `<span${op.menu && m === 'Tesorería' ? ' class="abierto"' : ''}${m === 'Tesorería' ? ' id="menuTesoreria"' : ''}>${m}</span>`).join('');
+  const comp = !!(op.menu && op.menu.complemento);
+  const menus = MENUS.filter(m => !(comp && m === 'Tesorería')).map(m => {
+    const abierto = op.menu && m === (comp ? 'Extensiones' : 'Tesorería');
+    return `<span${abierto ? ' class="abierto"' : ''} id="menu${m === 'Tesorería' ? 'Tesoreria' : m}">${m}</span>`;
+  }).join('');
   const pest = (op.pestañas || []).map(p => `<span class="p${p === op.activa ? ' activa' : ''}">${esc(p)}</span>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
 <div id="pantalla" style="width:${ancho}px">
@@ -140,7 +147,11 @@ function pantalla(op) {
   <div id="cuadricula" style="position:relative"><table class="rejilla" style="width:${46 + cols.reduce((s, c) => s + c.ancho, 0)}px">${cabecera}${filas}</table></div>
   ${op.capas || ''}
   ${op.pestañas ? `<div class="pestanas"><span class="mas">+</span><span class="mas">☰</span>${pest}</div>` : ''}
-  ${op.menu ? pintarMenu(op.menu.entradas, op.menu.resaltar, 0, 0) : ''}
+  ${op.menu && comp ? `<div class="menu" id="menuExt" style="min-width:230px">${EXTENSIONES.map(e => e === '-' ? '<hr>'
+    : `<div class="op${e[0] === 'Tesorería JMV' ? ' res' : ''}" ${e[0] === 'Tesorería JMV' ? 'id="opTesoreria"' : ''}><span>${e[0]}</span><span>${e[1] ? '▸' : ''}</span></div>`).join('')}</div>`
+    + pintarMenu(op.menu.entradas, op.menu.resaltar, 0, 0).replace('class="menu"', 'class="menu" id="menuTes"') : ''}
+  ${op.menu && !comp ? pintarMenu(op.menu.entradas, op.menu.resaltar, 0, 0).replace('class="menu"', 'class="menu" id="menuTes"') : ''}
+  ${op.menu && op.menu.sub ? pintarMenu(op.menu.sub.entradas, op.menu.sub.resaltar, 0, 0).replace('class="menu"', 'class="menu" id="menuSub"') : ''}
 </div>
 <script>
   (function () {
@@ -163,7 +174,21 @@ function pantalla(op) {
       d.style.width = (b.x + b.w - a.x + 6) + 'px'; d.style.height = (b.y + b.h - a.y + 6) + 'px';
       pantalla.appendChild(d);
     };
-    if (document.querySelector('.menu')) { var m = caja('#menuTesoreria'), d = document.querySelector('.menu'); d.style.left = m.x + 'px'; d.style.top = (m.y + m.h + 2) + 'px'; }
+    if (document.getElementById('menuTes') && !document.getElementById('menuExt')) {
+      var mt = caja('#menuTesoreria'), dt = document.getElementById('menuTes');
+      dt.style.left = mt.x + 'px'; dt.style.top = (mt.y + mt.h + 2) + 'px';
+    }
+    if (document.getElementById('menuSub')) {
+      var os = document.querySelector('#menuTes [data-sub="' + ${JSON.stringify((op.menu && op.menu.sub && op.menu.sub.titulo) || '')} + '"]');
+      var po = caja('#menuTes'), ro = os.getBoundingClientRect(), sb = document.getElementById('menuSub');
+      sb.style.left = (po.x + po.w - 4) + 'px'; sb.style.top = (ro.top - p.top - 6) + 'px';
+    }
+    if (document.getElementById('menuExt')) {
+      var m = caja('#menuExtensiones'), d = document.getElementById('menuExt');
+      d.style.left = m.x + 'px'; d.style.top = (m.y + m.h + 2) + 'px';
+      var o = caja('#opTesoreria'), t = document.getElementById('menuTes');
+      t.style.left = (o.x + o.w - 4) + 'px'; t.style.top = (o.y - 6) + 'px';
+    }
     ${op.script || ''}
   })();
 </script>

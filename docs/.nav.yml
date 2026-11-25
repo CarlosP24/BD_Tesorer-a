@@ -1,0 +1,6 @@
+# Solo de este sitio (no se lleva a documentacion-publica, que tiene el suyo).
+append_unmatched: true
+
+nav:
+  - Inicio: index.md
+  - Tesorería

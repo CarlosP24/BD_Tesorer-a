@@ -1,0 +1,48 @@
+# Guía de uso del libro de cuentas, publicada con GitHub Pages
+# (.github/workflows/docs.yml). Mismo motor, tema y extensiones que la web de
+# documentación de JMV España (JMV-Espana/documentacion-publica), a la que se
+# llevará algún día: docs/Tesorería/Libro de cuentas/ y docs/assets/img/ se
+# copian allí tal cual. Lo demás de docs/ (index.md, .nav.yml, extra.css y
+# los logos) es solo de este sitio. Ver CLAUDE.md §8.
+
+site_name: JMV — Tesorería
+site_description: Guía de uso del libro de cuentas de un centro JMV
+site_url: https://jmv-espana.github.io/BD_Tesoreria/
+repo_url: https://github.com/JMV-Espana/BD_Tesoreria
+repo_name: BD_Tesoreria
+# Sin esto, el lápiz de «Editar esta página» apunta a la rama master.
+edit_uri: edit/main/docs/
+copyright: '&copy; JMV España'
+
+theme:
+  name: material
+  language: es
+  logo: assets/logo-header.svg
+  favicon: assets/favicon.png
+  # La tipografía la fija extra.css, como en documentacion-publica.
+  font: false
+  palette:
+    primary: custom
+    accent: custom
+  features:
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - content.action.edit
+
+extra_css:
+  - assets/extra.css
+
+# Las mismas que documentacion-publica: lo que se escriba aquí tiene que
+# verse igual allí (por eso no hay listas de definición, por ejemplo).
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+
+# La navegación la dan los .nav.yml de cada carpeta (awesome-nav), como allí.
+plugins:
+  - search
+  - awesome-nav

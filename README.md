@@ -242,6 +242,19 @@ iniciales del ejercicio anterior** en el nuevo.
 
 ---
 
+## Guía de uso
+
+La guía completa, paso a paso y con capturas, para quien lleve la tesorería:
+**<https://jmv-espana.github.io/BD_Tesoreria/>**. Se publica sola al cambiar
+algo en [`docs/`](docs/Tesorería/Libro%20de%20cuentas/index.md) en `main`.
+
+Está preparada para incorporarse a la
+[web de documentación de JMV España](https://github.com/JMV-Espana/documentacion-publica):
+basta con copiar esa carpeta a su `docs/Tesorería/` (en lugar de
+`libro-cuentas.md`) y las imágenes de `docs/assets/img/` a su
+`docs/assets/img/`.
+
 ## Para quien mantenga el código
 
-Ver [CLAUDE.md](CLAUDE.md). Pruebas: `node pruebas/ejecutar.js`.
+Ver [CLAUDE.md](CLAUDE.md). Pruebas: `node pruebas/ejecutar.js`. Capturas de
+la guía: `node pruebas/capturas/generar.js` (CLAUDE.md §8).

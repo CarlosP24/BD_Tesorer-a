@@ -8,9 +8,15 @@ Config.ejemplo.js
 CLAUDE.md
 README.md
 pruebas/**
+docs/**
 
 .git/**
 .gitignore
 .clasp.json
 .DS_Store
 node_modules/**
+
+# La guía de uso y su publicación no son parte de Apps Script.
+mkdocs.yml
+.github/**
+site/**

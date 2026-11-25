@@ -1,0 +1,6 @@
+{
+  "name": "tesoreria-capturas",
+  "private": true,
+  "description": "Capturas de pantalla de la documentación (ver generar.js)",
+  "dependencies": { "puppeteer-core": "^23.0.0" }
+}

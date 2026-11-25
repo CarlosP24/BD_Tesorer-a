@@ -1,0 +1,17 @@
+# Orden de lectura recomendado, no alfabético.
+nav:
+  # index.md va primero: es la portada de la sección.
+  - index.md
+  - conceptos.md
+  - primeros-pasos.md
+  - importar-extracto.md
+  - pagar-transferencia.md
+  - completar-movimientos.md
+  - facturas.md
+  - efectivo.md
+  - cuotas.md
+  - escribir-en-la-hoja.md
+  - actividades.md
+  - informes.md
+  - cambio-de-ejercicio.md
+  - si-algo-no-cuadra.md

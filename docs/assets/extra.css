@@ -1,0 +1,56 @@
+/* Paleta de marca JMV España, la misma que documentacion-publica
+   (docs/assets/extra.css de ese repositorio, donde se explica cada color).
+   Solo de este sitio: allí ya está. */
+:root {
+  --md-primary-fg-color: #188870;
+  --md-primary-fg-color--light: #1BA187;
+  --md-primary-fg-color--dark: #146F5C;
+  --md-primary-bg-color: #FFFFFF;
+  --md-primary-bg-color--light: #FFFFFFB3;
+
+  --md-accent-fg-color: #C9A227;
+  --md-accent-fg-color--transparent: #C9A2271A;
+  --md-accent-bg-color: #FFFFFF;
+  --md-accent-bg-color--light: #FFFFFFB3;
+
+  --md-text-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --md-code-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --md-admonition-success: var(--md-primary-fg-color);
+  --md-admonition-info: #1B6FA5;
+  --md-admonition-warning: #8F711D;
+  --md-admonition-danger: #C1443B;
+}
+
+.md-typeset .admonition.success, .md-typeset details.success { border-color: var(--md-admonition-success); }
+.md-typeset .success > .admonition-title, .md-typeset .success > summary {
+  background-color: color-mix(in srgb, var(--md-admonition-success) 10%, transparent); }
+.md-typeset .success > .admonition-title::before, .md-typeset .success > summary::before {
+  background-color: var(--md-admonition-success); }
+
+.md-typeset .admonition.info, .md-typeset details.info { border-color: var(--md-admonition-info); }
+.md-typeset .info > .admonition-title, .md-typeset .info > summary {
+  background-color: color-mix(in srgb, var(--md-admonition-info) 10%, transparent); }
+.md-typeset .info > .admonition-title::before, .md-typeset .info > summary::before {
+  background-color: var(--md-admonition-info); }
+
+.md-typeset .admonition.warning, .md-typeset details.warning { border-color: var(--md-admonition-warning); }
+.md-typeset .warning > .admonition-title, .md-typeset .warning > summary {
+  background-color: color-mix(in srgb, var(--md-admonition-warning) 10%, transparent); }
+.md-typeset .warning > .admonition-title::before, .md-typeset .warning > summary::before {
+  background-color: var(--md-admonition-warning); }
+
+.md-typeset .admonition.danger, .md-typeset details.danger { border-color: var(--md-admonition-danger); }
+.md-typeset .danger > .admonition-title, .md-typeset .danger > summary {
+  background-color: color-mix(in srgb, var(--md-admonition-danger) 10%, transparent); }
+.md-typeset .danger > .admonition-title::before, .md-typeset .danger > summary::before {
+  background-color: var(--md-admonition-danger); }
+
+body, input { font-family: var(--md-text-font); }
+.md-typeset h1, .md-typeset h2, .md-typeset h3, .md-header__title, .md-nav__title {
+  font-family: "Helvetica Neue Bold", var(--md-text-font);
+  font-weight: 700;
+}
+
+/* El verde base no llega al contraste AA sobre blanco: los enlaces van en el oscuro. */
+.md-typeset a { color: var(--md-primary-fg-color--dark); }

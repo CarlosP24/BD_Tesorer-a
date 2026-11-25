@@ -30,6 +30,8 @@ código no coincide, **manda el código**.
 | `Informe.html` | Plantilla del PDF (scriptlets de HtmlService) |
 | `Config.js` | **No está en git** (§6). `Config.ejemplo.js` es su plantilla |
 | `pruebas/ejecutar.js` | Ejecuta `pruebasTesoreria()` en Node |
+| `docs/` | Guía de uso para tesorería (MkDocs Material), lista para llevarla a la web de documentación de JMV España (§8) |
+| `pruebas/capturas/` | Genera las capturas de `docs/assets/img/` con datos inventados (§8) |
 
 ---
 
@@ -261,6 +263,55 @@ clasp push
 - Antes de publicar: `git status` sin `Config.js` ni `.clasp.json`, y
   `grep -nE "1[A-Za-z0-9_-]{25,}|ES\d{2} ?\d{4}" *.js *.html` sin resultados
   fuera de `Config.js`.
+
+## 8. Documentación de uso (`docs/`)
+
+Guía paso a paso para quien lleve la tesorería, que puede no haber usado nunca
+Sheets ni hecho contabilidad. Sigue el estilo de
+[documentacion-publica](https://github.com/JMV-Espana/documentacion-publica)
+(MkDocs Material + awesome-nav; ver su README y su página «Subir imágenes») y
+está colocada con **las mismas rutas que tendrá allí**:
+
+- `docs/Tesorería/Libro de cuentas/*.md` y su `.nav.yml` (orden de lectura).
+  Sustituye al esbozo `docs/Tesorería/libro-cuentas.md` de esa web.
+- `docs/assets/img/<página>/NN.png`, numeradas por orden de aparición. Desde
+  las páginas: `../../assets/img/…` (dos niveles por debajo de `docs/`). Cada
+  imagen enlaza a sí misma para verla a tamaño real.
+- Avisos `!!! info/warning/danger/success` y `???` plegables, como allí. No
+  hay `def_list` en su `mkdocs.yml`: nada de listas de definición.
+- A páginas de esa web se enlaza con su **dirección completa**
+  (`https://jmv-espana.github.io/documentacion-publica/…`), para que el enlace
+  funcione en los dos sitios.
+
+**Mientras no se integre, se publica desde aquí** con GitHub Pages:
+<https://jmv-espana.github.io/BD_Tesoreria/>. `.github/workflows/docs.yml`
+construye con `mkdocs build --strict` en cada PR que toque `docs/` y publica
+al llegar a `main` (Settings → Pages → Source: GitHub Actions). Son **solo de
+este sitio**, y no se copian al integrar: `mkdocs.yml`, `docs/index.md`,
+`docs/.nav.yml`, `docs/assets/extra.css` (paleta copiada de la de allí) y los
+logos de `docs/assets/`. En local:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install mkdocs-material mkdocs-awesome-nav
+.venv/bin/mkdocs serve        # http://127.0.0.1:8000
+```
+
+**Las capturas se regeneran, no se editan a mano**, cuando cambia la interfaz:
+
+```bash
+npm install --prefix pruebas/capturas     # una vez (puppeteer-core; usa el Chrome instalado)
+node pruebas/capturas/generar.js          # todas; con un argumento, solo las que lo contienen
+```
+
+`generar.js` carga el código del proyecto con un conjunto de datos
+**inventados** (socios, proveedores, IBAN de la entidad 9999, CIF ficticios) y:
+abre las ventanas reales (`Asientos.html`, `Subir.html`…) con
+`google.script.run` simulado, cuyas respuestas calcula el propio código
+(`contextoDeVentana()`, `planDeTransferencia()`…), las rellena con clics y
+recorta; pinta el PDF con `Informe.html`; y **recrea** la hoja (Caja,
+Presupuesto, menú) en `hoja.js` con los colores y columnas del código. Si
+cambias columnas, colores o el menú, la recreación lo sigue sola; si cambias
+el marco de Google, no. La web es **pública**: nunca metas ahí un dato real.
 
 ### Sin verificar todavía en Apps Script real
 

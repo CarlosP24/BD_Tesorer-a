@@ -22,3 +22,7 @@ extractos/
 # macOS y Node
 .DS_Store
 node_modules/
+
+# Guía de uso construida en local (mkdocs build / serve)
+site/
+.venv/
